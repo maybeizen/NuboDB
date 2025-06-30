@@ -55,12 +55,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-repo/nubodb.git"
+    "url": "https://github.com/maybeizen/nubodb.git"
   },
   "bugs": {
-    "url": "https://github.com/your-repo/nubodb/issues"
+    "url": "https://github.com/maybeizen/nubodb/issues"
   },
-  "homepage": "https://github.com/your-repo/nubodb#readme",
+  "homepage": "https://github.com/maybeizen/nubodb#readme",
   "engines": {
     "node": ">=18.0.0"
   },
