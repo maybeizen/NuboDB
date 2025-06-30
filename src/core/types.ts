@@ -1,3 +1,6 @@
+/**
+ * Configuration options for database initialization.
+ */
 export interface DatabaseOptions {
   path?: string;
   inMemory?: boolean;
@@ -21,6 +24,9 @@ export interface DatabaseOptions {
   logLevel?: 'error' | 'warn' | 'info' | 'debug';
 }
 
+/**
+ * Definition of a single field in a document schema.
+ */
 export interface SchemaField {
   type:
     | 'string'
@@ -42,10 +48,16 @@ export interface SchemaField {
   validate?: (value: any) => boolean | string;
 }
 
+/**
+ * Complete schema definition for a collection.
+ */
 export interface Schema {
   [fieldName: string]: SchemaField;
 }
 
+/**
+ * Base document interface with system metadata.
+ */
 export interface Document {
   _id: string;
   _createdAt: Date;
@@ -54,6 +66,9 @@ export interface Document {
   [key: string]: any;
 }
 
+/**
+ * Lightweight document metadata without full content.
+ */
 export interface DocumentMetadata {
   id: string;
   createdAt: Date;
@@ -63,6 +78,9 @@ export interface DocumentMetadata {
   version?: number;
 }
 
+/**
+ * Supported query operators for filtering documents.
+ */
 export type QueryOperator =
   | '$eq'
   | '$ne'
@@ -80,14 +98,23 @@ export type QueryOperator =
   | '$nor'
   | '$not';
 
+/**
+ * Query condition with operator and value.
+ */
 export interface QueryCondition {
   [operator: string]: any;
 }
 
+/**
+ * MongoDB-like query filter for finding documents.
+ */
 export interface QueryFilter {
   [field: string]: any | QueryCondition;
 }
 
+/**
+ * Options for query operations like sorting, pagination, and projection.
+ */
 export interface QueryOptions {
   limit?: number;
   skip?: number;
@@ -98,6 +125,9 @@ export interface QueryOptions {
   timeout?: number;
 }
 
+/**
+ * Configuration options for collections.
+ */
 export interface CollectionOptions {
   schema?: Schema;
   encrypt?: boolean;
@@ -108,6 +138,9 @@ export interface CollectionOptions {
   maxCacheSize?: number;
 }
 
+/**
+ * Definition of a database index.
+ */
 export interface IndexDefinition {
   fields: { [field: string]: 1 | -1 };
   unique?: boolean;
@@ -115,6 +148,9 @@ export interface IndexDefinition {
   name?: string;
 }
 
+/**
+ * Result of a single document insert operation.
+ */
 export interface InsertResult {
   id: string;
   success: boolean;
@@ -122,12 +158,18 @@ export interface InsertResult {
   insertedCount: number;
 }
 
+/**
+ * Result of a bulk document insert operation.
+ */
 export interface InsertManyResult {
   insertedIds: string[];
   insertedCount: number;
   success: boolean;
 }
 
+/**
+ * Result of a document update operation.
+ */
 export interface UpdateResult {
   modifiedCount: number;
   success: boolean;
@@ -135,11 +177,17 @@ export interface UpdateResult {
   upsertedCount?: number;
 }
 
+/**
+ * Result of a document delete operation.
+ */
 export interface DeleteResult {
   deletedCount: number;
   success: boolean;
 }
 
+/**
+ * Result of a document find operation with pagination metadata.
+ */
 export interface FindResult<T = Document> {
   documents: T[];
   total: number;
@@ -148,6 +196,9 @@ export interface FindResult<T = Document> {
   totalPages?: number;
 }
 
+/**
+ * Fluent interface for building complex queries.
+ */
 export interface QueryBuilder<T = Document> {
   where(field: string, operator: QueryOperator, value: any): QueryBuilder<T>;
   and(field: string, operator: QueryOperator, value: any): QueryBuilder<T>;
@@ -161,12 +212,18 @@ export interface QueryBuilder<T = Document> {
   count(): Promise<number>;
 }
 
+/**
+ * Database transaction interface (placeholder for future implementation).
+ */
 export interface Transaction {
   commit(): Promise<void>;
   rollback(): Promise<void>;
   collection<T = Document>(name: string): any;
 }
 
+/**
+ * Database-wide statistics and metrics.
+ */
 export interface DatabaseStats {
   collections: number;
   totalDocuments: number;
@@ -175,6 +232,9 @@ export interface DatabaseStats {
   uptime: number;
 }
 
+/**
+ * Event types emitted by the database.
+ */
 export interface DatabaseEvents {
   'document:inserted': (collection: string, document: Document) => void;
   'document:updated': (collection: string, document: Document) => void;

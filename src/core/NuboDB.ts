@@ -11,6 +11,10 @@ import { EncryptionManager } from '../encryption/EncryptionManager';
 import { DatabaseError } from '../errors/DatabaseError';
 import { EventEmitter } from 'events';
 
+/**
+ * Main database instance that manages collections and provides the public API.
+ * Implements the singleton pattern for global database access.
+ */
 class NuboDB extends EventEmitter {
   private static instance: NuboDB | null = null;
   private options: DatabaseOptions;
@@ -21,6 +25,11 @@ class NuboDB extends EventEmitter {
   private startTime: number = Date.now();
   private logger: any;
 
+  /**
+   * Private constructor for singleton pattern.
+   *
+   * @param options - Database configuration including storage path, encryption, etc.
+   */
   private constructor(options: DatabaseOptions) {
     super();
 
@@ -53,6 +62,11 @@ class NuboDB extends EventEmitter {
     }
   }
 
+  /**
+   * Get the singleton database instance. Creates one if it doesn't exist.
+   *
+   * @param options - Required for first initialization.
+   */
   public static async getInstance(options?: DatabaseOptions): Promise<NuboDB> {
     if (!NuboDB.instance) {
       if (!options) {
@@ -66,10 +80,16 @@ class NuboDB extends EventEmitter {
     return NuboDB.instance;
   }
 
+  /**
+   * Create a new database instance (bypasses singleton).
+   *
+   * @param options - Database configuration.
+   */
   public static async create(options: DatabaseOptions): Promise<NuboDB> {
     return new NuboDB(options);
   }
 
+  /** Initialize the database and create storage directories. */
   public async open(): Promise<void> {
     if (this.isOpen) {
       this.log('Database is already open', 'warn');
@@ -89,6 +109,7 @@ class NuboDB extends EventEmitter {
     }
   }
 
+  /** Clean up resources and close all collections. */
   public async close(): Promise<void> {
     if (!this.isOpen) {
       this.log('Database is not open', 'warn');
@@ -113,6 +134,13 @@ class NuboDB extends EventEmitter {
     }
   }
 
+  /**
+   * Get or create a collection by name.
+   *
+   * @param name    - Collection name.
+   * @param options - Optional collection-specific settings.
+   * @returns Collection instance for CRUD operations.
+   */
   public collection<T = any>(
     name: string,
     options?: CollectionOptions
@@ -149,6 +177,13 @@ class NuboDB extends EventEmitter {
     return this.collections.get(name)! as Collection<T>;
   }
 
+  /**
+   * Explicitly create a new collection with optional schema.
+   *
+   * @param name    - Collection name.
+   * @param schema  - Optional schema for validation.
+   * @param options - Collection configuration.
+   */
   public async createCollection<T = any>(
     name: string,
     schema?: Schema,
@@ -191,6 +226,12 @@ class NuboDB extends EventEmitter {
     return collection;
   }
 
+  /**
+   * Delete all documents in a collection and remove it from memory.
+   *
+   * @param name - Collection to drop.
+   * @returns Success status.
+   */
   public async dropCollection(name: string): Promise<boolean> {
     if (!this.isOpen) {
       throw new DatabaseError(
@@ -221,6 +262,7 @@ class NuboDB extends EventEmitter {
     }
   }
 
+  /** Get names of all currently loaded collections. */
   public async listCollections(): Promise<string[]> {
     if (!this.isOpen) {
       throw new DatabaseError(
@@ -232,10 +274,12 @@ class NuboDB extends EventEmitter {
     return Array.from(this.collections.keys());
   }
 
+  /** Check if a collection is currently loaded in memory. */
   public hasCollection(name: string): boolean {
     return this.collections.has(name);
   }
 
+  /** Get aggregated statistics across all collections. */
   public async getStats(): Promise<DatabaseStats> {
     if (!this.isOpen) {
       throw new DatabaseError(
@@ -264,18 +308,22 @@ class NuboDB extends EventEmitter {
     };
   }
 
+  /** Get a copy of current database configuration. */
   public getOptions(): DatabaseOptions {
     return { ...this.options };
   }
 
+  /** Check if database is currently open and ready for operations. */
   public isDatabaseOpen(): boolean {
     return this.isOpen;
   }
 
+  /** Get the storage path where database files are located. */
   public getPath(): string {
     return this.options.path!;
   }
 
+  /** Clear all collection caches to free memory. */
   public clearCaches(): void {
     for (const collection of this.collections.values()) {
       collection.clearCache();
@@ -283,6 +331,11 @@ class NuboDB extends EventEmitter {
     this.log('All caches cleared', 'info');
   }
 
+  /**
+   * Create a backup of the database (placeholder implementation).
+   *
+   * @param backupPath - Destination for backup files.
+   */
   public async backup(backupPath: string): Promise<void> {
     if (!this.isOpen) {
       throw new DatabaseError(
@@ -302,6 +355,7 @@ class NuboDB extends EventEmitter {
     }
   }
 
+  /** Perform database compaction to optimize storage (placeholder). */
   public async compact(): Promise<void> {
     if (!this.isOpen) {
       throw new DatabaseError(

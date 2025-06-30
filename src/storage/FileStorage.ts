@@ -3,14 +3,23 @@ import { join } from 'path';
 import { Document, DocumentMetadata } from '../core/types';
 import { StorageError } from '../errors/DatabaseError';
 
+/**
+ * Thin wrapper around the Node.js `fs` module that provides collection-aware
+ * persistence utilities. Documents are stored as individual JSON files inside
+ * a directory named after the collection.
+ */
 export class FileStorage {
   private basePath: string;
   private ensuredDirs: Set<string> = new Set();
 
+  /**
+   * @param basePath - Root directory where all collections will be stored.
+   */
   constructor(basePath: string) {
     this.basePath = basePath;
   }
 
+  /** Ensure a directory exists (memoised for performance). */
   async ensureDirectory(path: string): Promise<void> {
     if (this.ensuredDirs.has(path)) return;
 
@@ -23,6 +32,12 @@ export class FileStorage {
     this.ensuredDirs.add(path);
   }
 
+  /**
+   * Persist a single document.
+   *
+   * @param collectionPath - Collection folder relative to `basePath`.
+   * @param document       - Document with metadata to write.
+   */
   async writeDocument(
     collectionPath: string,
     document: Document
@@ -41,6 +56,9 @@ export class FileStorage {
     }
   }
 
+  /**
+   * Read a single document. Returns `null` if the file doesn't exist.
+   */
   async readDocument(
     collectionPath: string,
     documentId: string
@@ -69,6 +87,7 @@ export class FileStorage {
     }
   }
 
+  /** Read every document stored in a collection directory. */
   async readAllDocuments(collectionPath: string): Promise<Document[]> {
     const fullPath = join(this.basePath, collectionPath);
 
@@ -92,6 +111,7 @@ export class FileStorage {
     }
   }
 
+  /** Delete a single document file. Returns `false` if it didn't exist. */
   async deleteDocument(
     collectionPath: string,
     documentId: string
@@ -115,6 +135,7 @@ export class FileStorage {
     }
   }
 
+  /** Check existence of a document without reading it. */
   async documentExists(
     collectionPath: string,
     documentId: string
@@ -133,6 +154,7 @@ export class FileStorage {
     }
   }
 
+  /** Lightweight metadata fetch that avoids parsing the whole file. */
   async getDocumentMetadata(
     collectionPath: string,
     documentId: string

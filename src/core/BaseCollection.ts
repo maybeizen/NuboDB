@@ -3,6 +3,9 @@ import { FileStorage } from '../storage/FileStorage';
 import { EncryptionManager } from '../encryption/EncryptionManager';
 import { CollectionError } from '../errors/DatabaseError';
 
+/**
+ * Document with system metadata automatically added by NuboDB.
+ */
 export type DocumentWithMetadata = Document & {
   _id: string;
   _createdAt: Date;
@@ -10,6 +13,12 @@ export type DocumentWithMetadata = Document & {
   _version?: number;
 };
 
+/**
+ * Abstract base class that provides common functionality for collections.
+ * Handles initialization, caching, indexing, and metadata management.
+ *
+ * @typeParam T - Document type for this collection.
+ */
 export abstract class BaseCollection<T = Document> {
   protected name: string;
   protected storage: FileStorage;
@@ -20,6 +29,13 @@ export abstract class BaseCollection<T = Document> {
   protected indexes: Map<string, Map<any, string[]>> = new Map();
   protected isInitialized: boolean = false;
 
+  /**
+   * Initialize the base collection with storage and options.
+   *
+   * @param name    - Collection name.
+   * @param storage - Storage engine instance.
+   * @param options - Collection configuration.
+   */
   constructor(
     name: string,
     storage: FileStorage,
@@ -42,6 +58,10 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
+  /**
+   * Load documents from storage, build indexes, and populate cache.
+   * Called automatically before first operation.
+   */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
@@ -70,12 +90,14 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
+  /** Ensure collection is initialized before performing operations. */
   protected async ensureInitialized(): Promise<void> {
     if (!this.isInitialized) {
       await this.initialize();
     }
   }
 
+  /** Get all documents from storage with decryption if enabled. */
   protected async getAllDocuments(): Promise<T[]> {
     await this.ensureInitialized();
 
@@ -101,6 +123,11 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
+  /**
+   * Build in-memory indexes for fields marked as indexed in schema.
+   *
+   * @param documents - Documents to index.
+   */
   protected async buildIndexes(documents: T[]): Promise<void> {
     if (!this.schema) return;
 
@@ -122,6 +149,12 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
+  /**
+   * Update indexes when documents are modified.
+   *
+   * @param document  - Document being modified.
+   * @param operation - Type of operation (insert/update/delete).
+   */
   protected async updateIndexes(
     document: T & DocumentWithMetadata,
     operation: 'insert' | 'update' | 'delete'
@@ -154,6 +187,12 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
+  /**
+   * Extract index key from document for compound indexes.
+   *
+   * @param document - Document to extract key from.
+   * @param fields   - Fields to include in index key.
+   */
   protected extractIndexKey(
     document: T & DocumentWithMetadata,
     fields: { [field: string]: 1 | -1 }
@@ -168,10 +207,16 @@ export abstract class BaseCollection<T = Document> {
     return keys.map(key => (document as any)[key]);
   }
 
+  /** Clear the document cache to free memory. */
   clearCache(): void {
     this.cache.clear();
   }
 
+  /**
+   * Get collection statistics.
+   *
+   * @returns Object with document count, size, index count, and cache size.
+   */
   async stats(): Promise<{
     totalDocuments: number;
     totalSize: number;
