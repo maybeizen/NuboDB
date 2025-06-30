@@ -28,6 +28,7 @@ export abstract class BaseCollection<T = Document> {
   protected cache: Map<string, T> = new Map();
   protected indexes: Map<string, Map<any, string[]>> = new Map();
   protected isInitialized: boolean = false;
+  protected documentCount: number = 0;
 
   /**
    * Initialize the base collection with storage and options.
@@ -101,20 +102,32 @@ export abstract class BaseCollection<T = Document> {
   protected async getAllDocuments(): Promise<T[]> {
     await this.ensureInitialized();
 
+    if (this.cache.size > 0 && this.cache.size === this.documentCount) {
+      return Array.from(this.cache.values());
+    }
+
     try {
       const documents = await this.storage.readAllDocuments(this.name);
       const decryptedDocuments: T[] = [];
 
-      for (const document of documents) {
-        let decryptedDocument = document;
-        if (this.encryptionManager && document.data) {
-          decryptedDocument = this.encryptionManager.decryptObject(
-            document.data
-          );
+      const batchSize = 1000;
+      for (let i = 0; i < documents.length; i += batchSize) {
+        const batch = documents.slice(i, i + batchSize);
+
+        for (const document of batch) {
+          let decryptedDocument = document;
+          if (this.encryptionManager && document.data) {
+            decryptedDocument = this.encryptionManager.decryptObject(
+              document.data
+            );
+          }
+          decryptedDocuments.push(decryptedDocument as T);
+
+          this.cache.set(document._id, decryptedDocument as T);
         }
-        decryptedDocuments.push(decryptedDocument as T);
       }
 
+      this.documentCount = documents.length;
       return decryptedDocuments;
     } catch (error) {
       throw new CollectionError(

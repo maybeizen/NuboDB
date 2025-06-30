@@ -33,36 +33,48 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
       let documents = await this.getAllDocuments();
 
       if (this.indexes.size > 0) {
-        documents = this.useIndexes(documents, filter);
+        const indexedDocs = this.useIndexesOptimized(documents, filter);
+        if (indexedDocs.length < documents.length) {
+          documents = indexedDocs;
+        }
       }
 
-      let filteredDocuments = this.filterDocuments(documents, filter);
+      const limit = options.limit || Number.MAX_SAFE_INTEGER;
+      const skip = options.skip || 0;
 
-      if (options.sort) {
-        filteredDocuments = this.sortDocuments(filteredDocuments, options.sort);
+      let filteredDocuments = this.filterDocumentsOptimized(
+        documents,
+        filter,
+        limit + skip
+      );
+      const total = filteredDocuments.length;
+
+      if (options.sort && filteredDocuments.length > 1) {
+        filteredDocuments = this.sortDocumentsOptimized(
+          filteredDocuments,
+          options.sort
+        );
       }
 
       if (options.projection) {
-        filteredDocuments = this.projectDocuments(
+        filteredDocuments = this.projectDocumentsOptimized(
           filteredDocuments,
           options.projection
         );
       }
 
-      const total = filteredDocuments.length;
-
-      if (options.skip) {
-        filteredDocuments = filteredDocuments.slice(options.skip);
+      if (skip > 0) {
+        filteredDocuments = filteredDocuments.slice(skip);
       }
 
-      if (options.limit) {
-        filteredDocuments = filteredDocuments.slice(0, options.limit);
+      if (limit < Number.MAX_SAFE_INTEGER) {
+        filteredDocuments = filteredDocuments.slice(0, limit);
       }
 
       return {
         documents: filteredDocuments,
         total,
-        hasMore: total > (options.skip || 0) + filteredDocuments.length,
+        hasMore: total > skip + filteredDocuments.length,
       };
     } catch (error) {
       throw new CollectionError(
@@ -144,8 +156,23 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param documents - Documents to filter.
    * @param filter    - Query filter to apply.
    */
-  private filterDocuments(documents: T[], filter: QueryFilter): T[] {
-    return documents.filter(document => this.matchesFilter(document, filter));
+  private filterDocumentsOptimized(
+    documents: T[],
+    filter: QueryFilter,
+    maxResults: number
+  ): T[] {
+    const results: T[] = [];
+    const filterEntries = Object.entries(filter);
+
+    for (const document of documents) {
+      if (results.length >= maxResults) break;
+
+      if (this.matchesFilterOptimized(document, filterEntries)) {
+        results.push(document);
+      }
+    }
+
+    return results;
   }
 
   /**
@@ -154,8 +181,11 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param document - Document to check.
    * @param filter   - Query filter to match against.
    */
-  private matchesFilter(document: T, filter: QueryFilter): boolean {
-    for (const [field, value] of Object.entries(filter)) {
+  private matchesFilterOptimized(
+    document: T,
+    filterEntries: [string, any][]
+  ): boolean {
+    for (const [field, value] of filterEntries) {
       if (field.startsWith('$')) {
         if (!this.matchesLogicalOperator(document, field, value as any[])) {
           return false;
@@ -163,7 +193,7 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
       } else {
         const fieldValue = (document as any)[field];
         if (typeof value === 'object' && value !== null) {
-          if (!this.matchesComparisonOperators(fieldValue, value)) {
+          if (!this.matchesComparisonOperatorsOptimized(fieldValue, value)) {
             return false;
           }
         } else {
@@ -212,8 +242,13 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param value     - Document field value.
    * @param operators - Comparison operators to apply.
    */
-  private matchesComparisonOperators(value: any, operators: any): boolean {
-    for (const [operator, operatorValue] of Object.entries(operators)) {
+  private matchesComparisonOperatorsOptimized(
+    value: any,
+    operators: any
+  ): boolean {
+    const operatorEntries = Object.entries(operators);
+
+    for (const [operator, operatorValue] of operatorEntries) {
       switch (operator) {
         case '$eq':
           if (value !== operatorValue) return false;
@@ -237,15 +272,17 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
           if (
             !Array.isArray(operatorValue) ||
             !(operatorValue as any[]).includes(value)
-          )
+          ) {
             return false;
+          }
           break;
         case '$nin':
           if (
             Array.isArray(operatorValue) &&
             (operatorValue as any[]).includes(value)
-          )
+          ) {
             return false;
+          }
           break;
         case '$exists':
           if (operatorValue && value === undefined) return false;
@@ -255,8 +292,9 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
           if (
             typeof value !== 'string' ||
             !new RegExp(operatorValue as string).test(value)
-          )
+          ) {
             return false;
+          }
           break;
       }
     }
@@ -269,14 +307,19 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param documents - Documents to sort.
    * @param sort      - Sort specification (field: direction).
    */
-  private sortDocuments(
+  private sortDocumentsOptimized(
     documents: T[],
     sort: { [field: string]: 1 | -1 } | Array<[string, 1 | -1]>
   ): T[] {
     const sortArray = Array.isArray(sort) ? sort : Object.entries(sort);
 
+    const sortFields = sortArray.map(([field, direction]) => ({
+      field,
+      direction,
+    }));
+
     return documents.sort((a, b) => {
-      for (const [field, direction] of sortArray) {
+      for (const { field, direction } of sortFields) {
         const aVal = (a as any)[field];
         const bVal = (b as any)[field];
 
@@ -293,15 +336,16 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param documents  - Documents to project.
    * @param projection - Field projection specification.
    */
-  private projectDocuments(
+  private projectDocumentsOptimized(
     documents: T[],
     projection: { [field: string]: 0 | 1 }
   ): T[] {
-    const includeFields = Object.entries(projection)
+    const projectionEntries = Object.entries(projection);
+    const includeFields = projectionEntries
       .filter(([_, value]) => value === 1)
       .map(([field, _]) => field);
 
-    const excludeFields = Object.entries(projection)
+    const excludeFields = projectionEntries
       .filter(([_, value]) => value === 0)
       .map(([field, _]) => field);
 
@@ -309,17 +353,18 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
       const projected: any = {};
 
       if (includeFields.length > 0) {
-        includeFields.forEach(field => {
+        for (const field of includeFields) {
           if ((document as any).hasOwnProperty(field)) {
             projected[field] = (document as any)[field];
           }
-        });
+        }
       } else {
-        Object.keys(document as any).forEach(field => {
+        const docKeys = Object.keys(document as any);
+        for (const field of docKeys) {
           if (!excludeFields.includes(field)) {
             projected[field] = (document as any)[field];
           }
-        });
+        }
       }
 
       return projected as T;
@@ -332,20 +377,65 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param documents - Documents to filter.
    * @param filter    - Query filter to apply.
    */
-  private useIndexes(documents: T[], filter: QueryFilter): T[] {
-    for (const [field, value] of Object.entries(filter)) {
+  private useIndexesOptimized(documents: T[], filter: QueryFilter): T[] {
+    const filterEntries = Object.entries(filter);
+
+    for (const [field, value] of filterEntries) {
       if (this.indexes.has(field) && typeof value !== 'object') {
         const index = this.indexes.get(field)!;
         const documentIds = index.get(value) || [];
 
+        if (documentIds.length === 0) {
+          return [];
+        }
+
         const idSet = new Set(documentIds);
 
-        return documents.filter(doc => {
+        const filtered: T[] = [];
+        for (const doc of documents) {
           const docWithMetadata = doc as T & DocumentWithMetadata;
-          return idSet.has(docWithMetadata._id);
-        });
+          if (idSet.has(docWithMetadata._id)) {
+            filtered.push(doc);
+          }
+        }
+
+        return filtered;
       }
     }
     return documents;
+  }
+
+  private filterDocuments(documents: T[], filter: QueryFilter): T[] {
+    return this.filterDocumentsOptimized(
+      documents,
+      filter,
+      Number.MAX_SAFE_INTEGER
+    );
+  }
+
+  private matchesFilter(document: T, filter: QueryFilter): boolean {
+    return this.matchesFilterOptimized(document, Object.entries(filter));
+  }
+
+  private matchesComparisonOperators(value: any, operators: any): boolean {
+    return this.matchesComparisonOperatorsOptimized(value, operators);
+  }
+
+  private sortDocuments(
+    documents: T[],
+    sort: { [field: string]: 1 | -1 } | Array<[string, 1 | -1]>
+  ): T[] {
+    return this.sortDocumentsOptimized(documents, sort);
+  }
+
+  private projectDocuments(
+    documents: T[],
+    projection: { [field: string]: 0 | 1 }
+  ): T[] {
+    return this.projectDocumentsOptimized(documents, projection);
+  }
+
+  private useIndexes(documents: T[], filter: QueryFilter): T[] {
+    return this.useIndexesOptimized(documents, filter);
   }
 }

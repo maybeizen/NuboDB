@@ -1,6 +1,6 @@
 {
   "name": "nubodb",
-  "version": "0.0.1-alpha",
+  "version": "1.0.1",
   "description": "A modern, fast, and feature-rich NoSQL database for Node.js with TypeScript support, encryption, schema validation, and modular architecture.",
   "type": "module",
   "main": "dist/index.js",
@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -49,7 +54,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/maybeizen/nubodb.git"
+    "url": "git+https://github.com/maybeizen/nubodb.git"
   },
   "bugs": {
     "url": "https://github.com/maybeizen/nubodb/issues"
