@@ -1,282 +1,111 @@
 import {
-  Schema,
   Document,
   QueryFilter,
   QueryOptions,
   CollectionOptions,
   InsertResult,
+  InsertManyResult,
   UpdateResult,
   DeleteResult,
   FindResult,
+  IndexDefinition,
+  QueryBuilder,
 } from './types';
 import { FileStorage } from '../storage/FileStorage';
-import { EncryptionManager } from '../encryption/EncryptionManager';
-import {
-  validateSchema,
-  applyDefaults,
-  sanitizeDocument,
-} from '../utils/schema';
-import { createDocumentMetadata, generateTimestamp } from '../utils/id';
-import { CollectionError, DocumentError } from '../errors/DatabaseError';
+import { DocumentOperations } from './DocumentOperations';
+import { QueryOperations } from './QueryOperations';
 
-export class Collection {
-  private name: string;
-  private storage: FileStorage;
-  private encryptionManager?: EncryptionManager;
-  private schema?: Schema;
-  private options: CollectionOptions;
+export class Collection<T = Document> {
+  private documentOps: DocumentOperations<T>;
+  private queryOps: QueryOperations<T>;
 
   constructor(
     name: string,
     storage: FileStorage,
     options: CollectionOptions = {}
   ) {
-    this.name = name;
-    this.storage = storage;
-    this.options = options;
-
-    if (options.schema) {
-      this.schema = options.schema;
-    }
-
-    if (options.encrypt) {
-      this.encryptionManager = new EncryptionManager('default-encryption-key');
-    }
+    this.documentOps = new DocumentOperations<T>(name, storage, options);
+    this.queryOps = new QueryOperations<T>(name, storage, options);
   }
 
-  async insert(data: any): Promise<InsertResult> {
-    try {
-      if (this.schema) {
-        validateSchema(data, this.schema);
-        data = applyDefaults(data, this.schema);
-      }
+  async insert(data: Partial<T>): Promise<InsertResult> {
+    return this.documentOps.insert(data);
+  }
 
-      const metadata = createDocumentMetadata();
-      const document: Document = {
-        _id: metadata.id,
-        _createdAt: metadata.createdAt,
-        _updatedAt: metadata.updatedAt,
-        ...sanitizeDocument(data),
-      };
+  async insertMany(documents: Partial<T>[]): Promise<InsertManyResult> {
+    return this.documentOps.insertMany(documents);
+  }
 
-      if (this.encryptionManager) {
-        const encryptedData = this.encryptionManager.encryptObject(document);
-        const encryptedDocument: Document = {
-          _id: document._id,
-          _createdAt: document._createdAt,
-          _updatedAt: document._updatedAt,
-          data: encryptedData,
-        };
-        await this.storage.writeDocument(this.name, encryptedDocument);
-      } else {
-        await this.storage.writeDocument(this.name, document);
-      }
+  async update(
+    filter: QueryFilter,
+    updateData: Partial<T>
+  ): Promise<UpdateResult> {
+    return this.documentOps.update(filter, updateData);
+  }
 
-      return {
-        id: document._id,
-        success: true,
-        document,
-      };
-    } catch (error) {
-      throw new DocumentError(
-        `Insert failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+  async upsert(
+    filter: QueryFilter,
+    updateData: Partial<T>
+  ): Promise<UpdateResult> {
+    return this.documentOps.upsert(filter, updateData);
+  }
+
+  async delete(filter: QueryFilter): Promise<DeleteResult> {
+    return this.documentOps.delete(filter);
+  }
+
+  async deleteOne(filter: QueryFilter): Promise<DeleteResult> {
+    return this.documentOps.deleteOne(filter);
+  }
+
+  async createIndex(definition: IndexDefinition): Promise<void> {
+    return this.documentOps.createIndex(definition);
   }
 
   async find(
     filter: QueryFilter = {},
     options: QueryOptions = {}
-  ): Promise<FindResult> {
-    try {
-      const allDocuments = await this.getAllDocuments();
-      let filteredDocuments = this.filterDocuments(allDocuments, filter);
-
-      if (options.sort) {
-        filteredDocuments = this.sortDocuments(filteredDocuments, options.sort);
-      }
-
-      if (options.projection) {
-        filteredDocuments = this.projectDocuments(
-          filteredDocuments,
-          options.projection
-        );
-      }
-
-      const total = filteredDocuments.length;
-
-      if (options.skip) {
-        filteredDocuments = filteredDocuments.slice(options.skip);
-      }
-
-      if (options.limit) {
-        filteredDocuments = filteredDocuments.slice(0, options.limit);
-      }
-
-      return {
-        documents: filteredDocuments,
-        total,
-        hasMore: total > (options.skip || 0) + filteredDocuments.length,
-      };
-    } catch (error) {
-      throw new CollectionError(
-        `Find failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+  ): Promise<FindResult<T>> {
+    return this.queryOps.find(filter, options);
   }
 
-  async findOne(filter: QueryFilter = {}): Promise<Document | null> {
-    const result = await this.find(filter, { limit: 1 });
-    return result.documents[0] || null;
+  async findOne(filter: QueryFilter = {}): Promise<T | null> {
+    return this.queryOps.findOne(filter);
   }
 
-  async update(filter: QueryFilter, updateData: any): Promise<UpdateResult> {
-    try {
-      const documents = await this.find(filter);
-      let modifiedCount = 0;
-
-      for (const document of documents.documents) {
-        if (this.schema) {
-          const updatedData = { ...document, ...updateData };
-          validateSchema(updatedData, this.schema);
-        }
-
-        const updatedDocument: Document = {
-          ...document,
-          ...updateData,
-          _updatedAt: generateTimestamp(),
-        };
-
-        if (this.encryptionManager) {
-          const encryptedData =
-            this.encryptionManager.encryptObject(updatedDocument);
-          const encryptedDocument: Document = {
-            _id: updatedDocument._id,
-            _createdAt: updatedDocument._createdAt,
-            _updatedAt: updatedDocument._updatedAt,
-            data: encryptedData,
-          };
-          await this.storage.writeDocument(this.name, encryptedDocument);
-        } else {
-          await this.storage.writeDocument(this.name, updatedDocument);
-        }
-
-        modifiedCount++;
-      }
-
-      return {
-        modifiedCount,
-        success: true,
-      };
-    } catch (error) {
-      throw new DocumentError(
-        `Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+  async findById(id: string): Promise<T | null> {
+    return this.queryOps.findById(id);
   }
 
-  async delete(filter: QueryFilter): Promise<DeleteResult> {
-    try {
-      const documents = await this.find(filter);
-      let deletedCount = 0;
-
-      for (const document of documents.documents) {
-        const deleted = await this.storage.deleteDocument(
-          this.name,
-          document._id
-        );
-        if (deleted) {
-          deletedCount++;
-        }
-      }
-
-      return {
-        deletedCount,
-        success: true,
-      };
-    } catch (error) {
-      throw new DocumentError(
-        `Delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+  query(): QueryBuilder<T> {
+    return this.queryOps.query();
   }
 
-  async deleteOne(filter: QueryFilter): Promise<DeleteResult> {
-    const document = await this.findOne(filter);
-    if (!document) {
-      return { deletedCount: 0, success: true };
-    }
-
-    const deleted = await this.storage.deleteDocument(this.name, document._id);
-    return {
-      deletedCount: deleted ? 1 : 0,
-      success: true,
-    };
+  async count(filter: QueryFilter = {}): Promise<number> {
+    return this.queryOps.count(filter);
   }
 
-  private async getAllDocuments(): Promise<Document[]> {
-    const documents = await this.storage.readAllDocuments(this.name);
-
-    if (this.encryptionManager) {
-      return documents.map(doc => {
-        if (doc.data) {
-          return this.encryptionManager!.decryptObject(doc.data);
-        }
-        return doc;
-      });
-    }
-
-    return documents;
+  async isEmpty(): Promise<boolean> {
+    return this.queryOps.isEmpty();
   }
 
-  private filterDocuments(
-    documents: Document[],
-    filter: QueryFilter
-  ): Document[] {
-    return documents.filter(document => {
-      for (const [key, value] of Object.entries(filter)) {
-        if (document[key] !== value) {
-          return false;
-        }
-      }
-      return true;
-    });
+  clearCache(): void {
+    this.documentOps.clearCache();
   }
 
-  private sortDocuments(
-    documents: Document[],
-    sort: { [field: string]: 1 | -1 }
-  ): Document[] {
-    return documents.sort((a, b) => {
-      for (const [field, direction] of Object.entries(sort)) {
-        const aVal = a[field];
-        const bVal = b[field];
-
-        if (aVal < bVal) return -1 * direction;
-        if (aVal > bVal) return 1 * direction;
-      }
-      return 0;
-    });
+  async stats(): Promise<{
+    totalDocuments: number;
+    totalSize: number;
+    indexes: number;
+    cacheSize: number;
+  }> {
+    return this.documentOps.stats();
   }
 
-  private projectDocuments(
-    documents: Document[],
-    projection: { [field: string]: 0 | 1 }
-  ): Document[] {
-    return documents.map(document => {
-      const projected: any = {};
-
-      for (const [field, include] of Object.entries(projection)) {
-        if (include === 1 && document.hasOwnProperty(field)) {
-          projected[field] = document[field];
-        }
-      }
-
-      projected._id = document._id;
-      projected._createdAt = document._createdAt;
-      projected._updatedAt = document._updatedAt;
-
-      return projected;
-    });
+  async initialize(): Promise<void> {
+    await Promise.all([
+      this.documentOps.initialize(),
+      this.queryOps.initialize(),
+    ]);
   }
 }

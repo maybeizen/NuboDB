@@ -1,29 +1,69 @@
 {
   "name": "nubodb",
   "version": "1.0.0",
-  "description": "A simple and fast NoSQL database package for Node.js.",
+  "description": "A modern, fast, and feature-rich NoSQL database for Node.js with TypeScript support, encryption, schema validation, and modular architecture.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:coverage": "echo \"No test coverage configured\" && exit 1",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "examples": "node examples/index.js",
+    "example:basic": "node examples/basic-usage.js",
+    "example:query": "node examples/query-builder.js",
+    "example:schema": "node examples/schema-validation.js",
+    "example:modular": "node examples/modular-architecture.js",
+    "example:encryption": "node examples/encryption.js",
+    "example:performance": "node examples/performance.js",
+    "clean": "rm -rf dist examples/*-db",
+    "prepublishOnly": "npm run build && npm run type-check"
   },
   "keywords": [
     "nosql",
     "database",
-    "nubodb",
-    "nubodb-js",
-    "nubodb-node"
+    "typescript",
+    "encryption",
+    "schema-validation",
+    "query-builder",
+    "modular",
+    "nodejs",
+    "javascript",
+    "document-store",
+    "json-database",
+    "file-database"
   ],
   "author": "maybeizen",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-repo/nubodb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-repo/nubodb/issues"
+  },
+  "homepage": "https://github.com/your-repo/nubodb#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "packageManager": "pnpm@10.12.4",
   "devDependencies": {
     "@types/node": "^24.0.7",

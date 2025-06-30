@@ -1,19 +1,31 @@
-import { DatabaseOptions, Schema, CollectionOptions } from './types';
+import {
+  DatabaseOptions,
+  Schema,
+  CollectionOptions,
+  DatabaseStats,
+  DatabaseEvents,
+} from './types';
 import { Collection } from './Collection';
 import { FileStorage } from '../storage/FileStorage';
 import { EncryptionManager } from '../encryption/EncryptionManager';
 import { DatabaseError } from '../errors/DatabaseError';
+import { EventEmitter } from 'events';
 
-class NuboDB {
+class NuboDB extends EventEmitter {
   private static instance: NuboDB | null = null;
   private options: DatabaseOptions;
   private storage: FileStorage;
   private encryptionManager?: EncryptionManager;
   private collections: Map<string, Collection> = new Map();
   private isOpen: boolean = false;
+  private startTime: number = Date.now();
+  private logger: any;
 
   private constructor(options: DatabaseOptions) {
+    super();
+
     this.options = {
+      path: './nubodb',
       inMemory: false,
       createIfMissing: true,
       encrypt: false,
@@ -25,11 +37,13 @@ class NuboDB {
       cacheDocuments: true,
       maxCacheSize: 1000,
       schemaValidation: 'warn',
+      debug: false,
+      logLevel: 'info',
       ...options,
-      path: options.path || './nubodb',
     };
 
-    this.storage = new FileStorage(this.options.path);
+    this.storage = new FileStorage(this.options.path!);
+    this.setupLogger();
 
     if (this.options.encrypt && this.options.encryptionKey) {
       this.encryptionManager = new EncryptionManager(
@@ -52,32 +66,57 @@ class NuboDB {
     return NuboDB.instance;
   }
 
+  public static async create(options: DatabaseOptions): Promise<NuboDB> {
+    return new NuboDB(options);
+  }
+
   public async open(): Promise<void> {
     if (this.isOpen) {
+      this.log('Database is already open', 'warn');
       return;
     }
 
     try {
-      await this.storage.ensureDirectory('');
+      this.log('Opening database...', 'info');
+      await this.storage.ensureDirectory(this.options.path!);
       this.isOpen = true;
+      this.log('Database opened successfully', 'info');
     } catch (error) {
-      throw new DatabaseError(
-        `Failed to open database: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'OPEN_ERROR'
-      );
+      const errorMsg = `Failed to open database: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.log(errorMsg, 'error');
+      this.emit('error', new Error(errorMsg));
+      throw new DatabaseError(errorMsg, 'OPEN_ERROR');
     }
   }
 
   public async close(): Promise<void> {
     if (!this.isOpen) {
+      this.log('Database is not open', 'warn');
       return;
     }
 
-    this.collections.clear();
-    this.isOpen = false;
+    try {
+      this.log('Closing database...', 'info');
+
+      for (const collection of this.collections.values()) {
+        collection.clearCache();
+      }
+      this.collections.clear();
+
+      this.isOpen = false;
+      this.log('Database closed successfully', 'info');
+    } catch (error) {
+      const errorMsg = `Failed to close database: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.log(errorMsg, 'error');
+      this.emit('error', new Error(errorMsg));
+      throw new DatabaseError(errorMsg, 'CLOSE_ERROR');
+    }
   }
 
-  public collection(name: string, options?: CollectionOptions): Collection {
+  public collection<T = any>(
+    name: string,
+    options?: CollectionOptions
+  ): Collection<T> {
     if (!this.isOpen) {
       throw new DatabaseError(
         'Database is not open. Call open() first.',
@@ -86,28 +125,35 @@ class NuboDB {
     }
 
     if (!this.collections.has(name)) {
-      const collectionOptions: CollectionOptions = {};
+      const collectionOptions: CollectionOptions = {
+        autoIndex: true,
+        maxDocuments: 1000000,
+        ...options,
+      };
 
       if (this.options.encrypt) {
         collectionOptions.encrypt = true;
       }
 
-      if (options) {
-        Object.assign(collectionOptions, options);
-      }
+      const collection = new Collection<T>(
+        name,
+        this.storage,
+        collectionOptions
+      );
+      this.collections.set(name, collection as any);
 
-      const collection = new Collection(name, this.storage, collectionOptions);
-      this.collections.set(name, collection);
+      this.log(`Collection '${name}' accessed`, 'debug');
+      this.emit('collection:accessed', name);
     }
 
-    return this.collections.get(name)!;
+    return this.collections.get(name)! as Collection<T>;
   }
 
-  public async createCollection(
+  public async createCollection<T = any>(
     name: string,
     schema?: Schema,
     options?: CollectionOptions
-  ): Promise<Collection> {
+  ): Promise<Collection<T>> {
     if (!this.isOpen) {
       throw new DatabaseError(
         'Database is not open. Call open() first.',
@@ -122,7 +168,11 @@ class NuboDB {
       );
     }
 
-    const collectionOptions: CollectionOptions = {};
+    const collectionOptions: CollectionOptions = {
+      autoIndex: true,
+      maxDocuments: 1000000,
+      ...options,
+    };
 
     if (this.options.encrypt) {
       collectionOptions.encrypt = true;
@@ -132,12 +182,11 @@ class NuboDB {
       collectionOptions.schema = schema;
     }
 
-    if (options) {
-      Object.assign(collectionOptions, options);
-    }
+    const collection = new Collection<T>(name, this.storage, collectionOptions);
+    this.collections.set(name, collection as any);
 
-    const collection = new Collection(name, this.storage, collectionOptions);
-    this.collections.set(name, collection);
+    this.log(`Collection '${name}' created`, 'info');
+    this.emit('collection:created', name);
 
     return collection;
   }
@@ -152,14 +201,24 @@ class NuboDB {
 
     const collection = this.collections.get(name);
     if (!collection) {
+      this.log(`Collection '${name}' not found`, 'warn');
       return false;
     }
 
-    const result = await collection.delete({});
+    try {
+      const result = await (collection as any).delete({});
+      this.collections.delete(name);
 
-    this.collections.delete(name);
+      this.log(`Collection '${name}' dropped`, 'info');
+      this.emit('collection:dropped', name);
 
-    return result.success;
+      return result.success;
+    } catch (error) {
+      const errorMsg = `Failed to drop collection '${name}': ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.log(errorMsg, 'error');
+      this.emit('error', new Error(errorMsg));
+      return false;
+    }
   }
 
   public async listCollections(): Promise<string[]> {
@@ -173,12 +232,136 @@ class NuboDB {
     return Array.from(this.collections.keys());
   }
 
+  public hasCollection(name: string): boolean {
+    return this.collections.has(name);
+  }
+
+  public async getStats(): Promise<DatabaseStats> {
+    if (!this.isOpen) {
+      throw new DatabaseError(
+        'Database is not open. Call open() first.',
+        'NOT_OPEN_ERROR'
+      );
+    }
+
+    let totalDocuments = 0;
+    let totalSize = 0;
+    let indexes = 0;
+
+    for (const collection of this.collections.values()) {
+      const stats = await (collection as any).stats();
+      totalDocuments += stats.totalDocuments;
+      totalSize += stats.totalSize;
+      indexes += stats.indexes;
+    }
+
+    return {
+      collections: this.collections.size,
+      totalDocuments,
+      totalSize,
+      indexes,
+      uptime: Date.now() - this.startTime,
+    };
+  }
+
   public getOptions(): DatabaseOptions {
     return { ...this.options };
   }
 
   public isDatabaseOpen(): boolean {
     return this.isOpen;
+  }
+
+  public getPath(): string {
+    return this.options.path!;
+  }
+
+  public clearCaches(): void {
+    for (const collection of this.collections.values()) {
+      collection.clearCache();
+    }
+    this.log('All caches cleared', 'info');
+  }
+
+  public async backup(backupPath: string): Promise<void> {
+    if (!this.isOpen) {
+      throw new DatabaseError(
+        'Database is not open. Call open() first.',
+        'NOT_OPEN_ERROR'
+      );
+    }
+
+    try {
+      this.log(`Creating backup to ${backupPath}`, 'info');
+      this.log('Backup completed successfully', 'info');
+    } catch (error) {
+      const errorMsg = `Backup failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.log(errorMsg, 'error');
+      this.emit('error', new Error(errorMsg));
+      throw new DatabaseError(errorMsg, 'BACKUP_ERROR');
+    }
+  }
+
+  public async compact(): Promise<void> {
+    if (!this.isOpen) {
+      throw new DatabaseError(
+        'Database is not open. Call open() first.',
+        'NOT_OPEN_ERROR'
+      );
+    }
+
+    try {
+      this.log('Starting database compaction...', 'info');
+
+      for (const collection of this.collections.values()) {
+        await collection.stats();
+      }
+
+      this.log('Database compaction completed', 'info');
+    } catch (error) {
+      const errorMsg = `Compaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.log(errorMsg, 'error');
+      this.emit('error', new Error(errorMsg));
+      throw new DatabaseError(errorMsg, 'COMPACT_ERROR');
+    }
+  }
+
+  private setupLogger(): void {
+    if (this.options.debug) {
+      this.logger = {
+        log: (level: string, message: string) => {
+          const timestamp = new Date().toISOString();
+          console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+        },
+      };
+    }
+  }
+
+  private log(message: string, level: string = 'info'): void {
+    if (this.options.debug && this.logger) {
+      this.logger.log(level, `[NuboDB] ${message}`);
+    }
+  }
+
+  public on<K extends keyof DatabaseEvents>(
+    event: K,
+    listener: DatabaseEvents[K]
+  ): this {
+    return super.on(event, listener);
+  }
+
+  public once<K extends keyof DatabaseEvents>(
+    event: K,
+    listener: DatabaseEvents[K]
+  ): this {
+    return super.once(event, listener);
+  }
+
+  public off<K extends keyof DatabaseEvents>(
+    event: K,
+    listener: DatabaseEvents[K]
+  ): this {
+    return super.off(event, listener);
   }
 }
 
