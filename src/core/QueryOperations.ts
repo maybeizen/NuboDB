@@ -19,7 +19,7 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     try {
       let documents = await this.getAllDocuments();
 
-      if (Object.keys(this.indexes).length > 0) {
+      if (this.indexes.size > 0) {
         documents = this.useIndexes(documents, filter);
       }
 
@@ -261,9 +261,12 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
       if (this.indexes.has(field) && typeof value !== 'object') {
         const index = this.indexes.get(field)!;
         const documentIds = index.get(value) || [];
+
+        const idSet = new Set(documentIds);
+
         return documents.filter(doc => {
           const docWithMetadata = doc as T & DocumentWithMetadata;
-          return documentIds.includes(docWithMetadata._id);
+          return idSet.has(docWithMetadata._id);
         });
       }
     }

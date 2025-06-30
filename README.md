@@ -7,7 +7,7 @@ A modern, fast, and feature-rich NoSQL database for Node.js with TypeScript supp
 - **🔐 Built-in Encryption** - AES-256 encryption for sensitive data
 - **📋 Schema Validation** - Comprehensive validation with custom rules
 - **🔍 Advanced Querying** - MongoDB-like query syntax with QueryBuilder
-- **⚡ High Performance** - Caching, indexing, and optimized operations
+- **⚡ High Performance** - Caching, indexing, and newly optimized storage & query engine
 - **🏗️ Modular Architecture** - Extensible and maintainable codebase
 - **📊 Real-time Statistics** - Monitor database and collection performance
 - **🛡️ Type Safety** - Full TypeScript support with type definitions

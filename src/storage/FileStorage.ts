@@ -5,17 +5,22 @@ import { StorageError } from '../errors/DatabaseError';
 
 export class FileStorage {
   private basePath: string;
+  private ensuredDirs: Set<string> = new Set();
 
   constructor(basePath: string) {
     this.basePath = basePath;
   }
 
   async ensureDirectory(path: string): Promise<void> {
+    if (this.ensuredDirs.has(path)) return;
+
     try {
       await fs.access(path);
     } catch {
       await fs.mkdir(path, { recursive: true });
     }
+
+    this.ensuredDirs.add(path);
   }
 
   async writeDocument(
@@ -28,11 +33,7 @@ export class FileStorage {
     await this.ensureDirectory(fullPath);
 
     try {
-      await fs.writeFile(
-        documentPath,
-        JSON.stringify(document, null, 2),
-        'utf8'
-      );
+      await fs.writeFile(documentPath, JSON.stringify(document), 'utf8');
     } catch (error) {
       throw new StorageError(
         `Failed to write document: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -76,17 +77,14 @@ export class FileStorage {
       const files = await fs.readdir(fullPath);
       const jsonFiles = files.filter(file => file.endsWith('.json'));
 
-      const documents: Document[] = [];
+      const documents = await Promise.all(
+        jsonFiles.map(async file => {
+          const documentId = file.replace('.json', '');
+          return this.readDocument(collectionPath, documentId);
+        })
+      );
 
-      for (const file of jsonFiles) {
-        const documentId = file.replace('.json', '');
-        const document = await this.readDocument(collectionPath, documentId);
-        if (document) {
-          documents.push(document);
-        }
-      }
-
-      return documents;
+      return documents.filter(Boolean) as Document[];
     } catch (error) {
       throw new StorageError(
         `Failed to read documents: ${error instanceof Error ? error.message : 'Unknown error'}`
