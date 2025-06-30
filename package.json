@@ -71,6 +71,7 @@
     "eslint": "^9.30.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.5.1",
+    "nubodb": "1.2.0-alpha",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.0",

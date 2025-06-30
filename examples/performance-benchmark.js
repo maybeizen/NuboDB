@@ -1,4 +1,4 @@
-import { createDatabase } from '../src/index.js';
+import { createDatabase } from 'nubodb';
 
 /**
  * Comprehensive performance benchmark for NuboDB optimizations.

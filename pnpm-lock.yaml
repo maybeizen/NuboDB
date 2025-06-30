@@ -29,6 +29,9 @@ importers:
       eslint-plugin-prettier:
         specifier: ^5.5.1
         version: 5.5.1(eslint-config-prettier@9.1.0(eslint@9.30.0))(eslint@9.30.0)(prettier@3.6.2)
+      nubodb:
+        specifier: 1.2.0-alpha
+        version: 1.2.0-alpha
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
@@ -884,6 +887,10 @@ packages:
 
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
+
+  nubodb@1.2.0-alpha:
+    resolution: {integrity: sha512-/+d1ls6ZqImXgsAaVfRLeJiROVlX9Br+TCkTDWU4mI30Y+CkS6VuoEPJ1xESK1RI7WXLSzXHvuNhuPgYMYmySQ==}
+    engines: {node: '>=18.0.0'}
 
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
@@ -1929,6 +1936,8 @@ snapshots:
       thenify-all: 1.6.0
 
   natural-compare@1.4.0: {}
+
+  nubodb@1.2.0-alpha: {}
 
   object-assign@4.1.1: {}
 
