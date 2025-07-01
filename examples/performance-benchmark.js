@@ -60,95 +60,79 @@ async function performanceBenchmark() {
 
   console.log('🔍 Query Performance Tests\n');
 
-  console.log('1. Simple equality query (indexed field):');
-  const startEq = performance.now();
-  for (let i = 0; i < 1000; i++) {
-    await users.find({ name: `User ${i % 1000}` });
+  async function benchmarkQuery(name, fn) {
+    let docsRead = 0;
+    const start = performance.now();
+    for (let i = 0; i < 1000; i++) {
+      const result = await fn(i);
+      if (Array.isArray(result)) {
+        docsRead += result.length;
+      } else if (typeof result === 'object' && result !== null) {
+        docsRead += 1;
+      }
+    }
+    const elapsed = performance.now() - start;
+    const qps = Math.round((1000 / elapsed) * 1000);
+    const dps = Math.round((docsRead / elapsed) * 1000);
+    console.log(`${name}:`);
+    console.log(`   ${qps.toLocaleString()} queries/sec`);
+    console.log(`   ${dps.toLocaleString()} docs/sec\n`);
+    return { qps, dps };
   }
-  const eqTime = performance.now() - startEq;
-  const eqRate = Math.round((1000 / eqTime) * 1000);
-  console.log(`   ${eqRate.toLocaleString()} queries/second\n`);
 
-  console.log('2. Range query (indexed field):');
-  const startRange = performance.now();
-  for (let i = 0; i < 1000; i++) {
-    await users.find({ age: { $gte: 25, $lte: 35 } });
-  }
-  const rangeTime = performance.now() - startRange;
-  const rangeRate = Math.round((1000 / rangeTime) * 1000);
-  console.log(`   ${rangeRate.toLocaleString()} queries/second\n`);
+  const eq = await benchmarkQuery(
+    '1. Simple equality query (indexed field)',
+    i => users.find({ name: `User ${i % 1000}` })
+  );
 
-  console.log('3. Complex query (multiple conditions):');
-  const startComplex = performance.now();
-  for (let i = 0; i < 1000; i++) {
-    await users.find({
-      $and: [
-        { age: { $gte: 20 } },
-        { active: true },
-        { category: { $in: ['user', 'moderator'] } },
-      ],
-    });
-  }
-  const complexTime = performance.now() - startComplex;
-  const complexRate = Math.round((1000 / complexTime) * 1000);
-  console.log(`   ${complexRate.toLocaleString()} queries/second\n`);
+  const range = await benchmarkQuery('2. Range query (indexed field)', i =>
+    users.find({ age: { $gte: 25, $lte: 35 } })
+  );
 
-  console.log('4. Query with sorting and limiting:');
-  const startSort = performance.now();
-  for (let i = 0; i < 1000; i++) {
-    await users.find(
+  const complex = await benchmarkQuery(
+    '3. Complex query (multiple conditions)',
+    i =>
+      users.find({
+        $and: [
+          { age: { $gte: 20 } },
+          { active: true },
+          { category: { $in: ['user', 'moderator'] } },
+        ],
+      })
+  );
+
+  const sort = await benchmarkQuery('4. Query with sorting and limiting', i =>
+    users.find(
       { active: true },
       { sort: { age: -1 }, limit: 10, skip: i % 100 }
-    );
-  }
-  const sortTime = performance.now() - startSort;
-  const sortRate = Math.round((1000 / sortTime) * 1000);
-  console.log(`   ${sortRate.toLocaleString()} queries/second\n`);
+    )
+  );
 
-  console.log('5. Query with field projection:');
-  const startProject = performance.now();
-  for (let i = 0; i < 1000; i++) {
-    await users.find(
+  const project = await benchmarkQuery('5. Query with field projection', i =>
+    users.find(
       { category: 'user' },
       { projection: { name: 1, email: 1, age: 1 } }
-    );
-  }
-  const projectTime = performance.now() - startProject;
-  const projectRate = Math.round((1000 / projectTime) * 1000);
-  console.log(`   ${projectRate.toLocaleString()} queries/second\n`);
+    )
+  );
 
-  console.log('6. Count queries:');
-  const startCount = performance.now();
-  for (let i = 0; i < 1000; i++) {
-    await users.count({ active: true, age: { $gte: 25 } });
-  }
-  const countTime = performance.now() - startCount;
-  const countRate = Math.round((1000 / countTime) * 1000);
-  console.log(`   ${countRate.toLocaleString()} queries/second\n`);
+  const count = await benchmarkQuery('6. Count queries', async i => {
+    const count = await users.count({ active: true, age: { $gte: 25 } });
+    return Array.from({ length: count });
+  });
 
-  console.log('7. FindOne queries:');
-  const startFindOne = performance.now();
-  for (let i = 0; i < 1000; i++) {
-    await users.findOne({ email: `user${i % 1000}@example.com` });
-  }
-  const findOneTime = performance.now() - startFindOne;
-  const findOneRate = Math.round((1000 / findOneTime) * 1000);
-  console.log(`   ${findOneRate.toLocaleString()} queries/second\n`);
+  const findOne = await benchmarkQuery('7. FindOne queries', i =>
+    users.findOne({ email: `user${i % 1000}@example.com` })
+  );
 
-  console.log('8. QueryBuilder performance:');
-  const startQB = performance.now();
-  for (let i = 0; i < 1000; i++) {
-    await users
+  const qb = await benchmarkQuery('8. QueryBuilder performance', i =>
+    users
       .query()
       .where('age', '$gte', 25)
       .and('active', '$eq', true)
       .sort('name', 1)
       .limit(5)
-      .execute();
-  }
-  const qbTime = performance.now() - startQB;
-  const qbRate = Math.round((1000 / qbTime) * 1000);
-  console.log(`   ${qbRate.toLocaleString()} queries/second\n`);
+      .execute()
+  );
 
   const stats = await users.stats();
   console.log('📊 Collection Statistics:');
@@ -159,13 +143,62 @@ async function performanceBenchmark() {
   console.log(`   Indexes: ${stats.indexes}`);
   console.log(`   Cache size: ${stats.cacheSize.toLocaleString()}`);
 
+  const avgQueryRate = Math.round(
+    (eq.qps +
+      range.qps +
+      complex.qps +
+      sort.qps +
+      project.qps +
+      count.qps +
+      findOne.qps +
+      qb.qps) /
+      8
+  );
+  const avgDocsRate = Math.round(
+    (eq.dps +
+      range.dps +
+      complex.dps +
+      sort.dps +
+      project.dps +
+      count.dps +
+      findOne.dps +
+      qb.dps) /
+      8
+  );
+  const bestQueryRate = Math.max(
+    eq.qps,
+    range.qps,
+    complex.qps,
+    sort.qps,
+    project.qps,
+    count.qps,
+    findOne.qps,
+    qb.qps
+  );
+  const bestDocsRate = Math.max(
+    eq.dps,
+    range.dps,
+    complex.dps,
+    sort.dps,
+    project.dps,
+    count.dps,
+    findOne.dps,
+    qb.dps
+  );
+
   console.log('\n📈 Performance Summary:');
   console.log(`   Insert rate: ${insertRate.toLocaleString()} docs/sec`);
   console.log(
-    `   Average query rate: ${Math.round((eqRate + rangeRate + complexRate + sortRate + projectRate + countRate + findOneRate + qbRate) / 8).toLocaleString()} queries/sec`
+    `   Average query rate: ${avgQueryRate.toLocaleString()} queries/sec`
   );
   console.log(
-    `   Best query rate: ${Math.max(eqRate, rangeRate, complexRate, sortRate, projectRate, countRate, findOneRate, qbRate).toLocaleString()} queries/sec`
+    `   Average doc read rate: ${avgDocsRate.toLocaleString()} docs/sec`
+  );
+  console.log(
+    `   Best query rate: ${bestQueryRate.toLocaleString()} queries/sec`
+  );
+  console.log(
+    `   Best doc read rate: ${bestDocsRate.toLocaleString()} docs/sec`
   );
 
   await db.close();

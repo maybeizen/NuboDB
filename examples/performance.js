@@ -3,7 +3,6 @@ import { createDatabase } from '../dist/index.js';
 async function performanceExample() {
   console.log('=== NuboDB Performance Example ===\n');
 
-  // Create database with performance optimizations
   const db = await createDatabase({
     path: './examples/performance-db',
     debug: true,
