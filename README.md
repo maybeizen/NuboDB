@@ -495,11 +495,6 @@ await collection.stats()                         // Collection stats
 - **Issues**: [GitHub Issues](https://github.com/maybeizen/nubodb/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/maybeizen/nubodb/discussions)
 
-## Version History
-
-- **v1.2.0-alpha**: Performance optimizations, improved query engine
-- **v1.0.0**: Initial stable release with core features
-
 ---
 
 **Made with ❤️ by maybeizen**
