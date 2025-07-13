@@ -1,4 +1,4 @@
-import {
+import type {
   Document,
   InsertResult,
   InsertManyResult,
@@ -7,7 +7,8 @@ import {
   IndexDefinition,
   QueryFilter,
 } from './types';
-import { BaseCollection, DocumentWithMetadata } from './BaseCollection';
+import type { DocumentWithMetadata } from './BaseCollection';
+import { BaseCollection } from './BaseCollection';
 import {
   validateSchema,
   applyDefaults,

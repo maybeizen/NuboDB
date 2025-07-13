@@ -43,7 +43,7 @@ We welcome contributions from the community! Here are the main ways you can cont
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/nubodb.git
+git clone https://github.com/maybeizen/nubodb.git
 cd nubodb
 
 # Install dependencies
@@ -63,29 +63,35 @@ node examples/basic-usage.js
 
 ```bash
 # Build TypeScript
-pnpm build
+pnpm build              # or npm run build
 
 # Watch mode for development
-pnpm dev
-
-# Run tests
-pnpm test
-
-# Run tests with coverage
-pnpm test:coverage
+pnpm dev                # or npm run dev
 
 # Type checking
-pnpm type-check
+pnpm type-check         # or npm run type-check
 
 # Linting
-pnpm lint
+pnpm lint               # or npm run lint
+pnpm lint:fix           # or npm run lint:fix (auto-fix issues)
 
-# Format code
-pnpm format
+# Code formatting
+pnpm format             # or npm run format
+pnpm format:check       # or npm run format:check
 
-# Run examples
-pnpm examples
+# Run individual examples
+pnpm example:basic      # Basic usage example
+pnpm example:query      # Query builder example
+pnpm example:schema     # Schema validation example
+pnpm example:modular    # Modular architecture example
+pnpm example:encryption # Encryption example
+pnpm example:performance # Performance benchmark
+
+# Clean build artifacts
+pnpm clean              # or npm run clean
 ```
+
+**Note**: Currently, there are no test scripts configured. Contributors are encouraged to add testing infrastructure.
 
 ## 📝 Coding Standards
 
@@ -131,44 +137,84 @@ src/
 
 ### Test Structure
 
+**Note**: NuboDB currently lacks a formal testing framework. This is an excellent opportunity for contributors!
+
+**Recommended testing setup** (to be implemented):
+
 ```typescript
-describe('Feature Name', () => {
-  beforeEach(() => {
-    // Setup
+// Example test structure using Jest/Vitest
+import { createDatabase } from '../src';
+import { NuboDB } from '../src/core/NuboDB';
+
+describe('Database Operations', () => {
+  let db: NuboDB;
+  const testDbPath = './test-db-' + Date.now();
+
+  beforeEach(async () => {
+    db = await createDatabase({
+      path: testDbPath,
+      inMemory: true, // Use in-memory for faster tests
+    });
+    await db.open();
   });
 
-  afterEach(() => {
-    // Cleanup
+  afterEach(async () => {
+    await db.close();
+    // Clean up test database files if not in-memory
   });
 
-  it('should do something specific', async () => {
+  it('should insert and retrieve a document', async () => {
     // Arrange
-    const db = await createDatabase({ path: './test-db' });
+    const collection = db.collection('users');
+    const userData = { name: 'John Doe', email: 'john@example.com' };
 
     // Act
-    const result = await db.collection('test').insert({ test: true });
+    const insertResult = await collection.insert(userData);
+    const foundUser = await collection.findById(insertResult.insertedId);
 
     // Assert
-    expect(result.document.test).toBe(true);
+    expect(foundUser).toBeTruthy();
+    expect(foundUser?.name).toBe('John Doe');
+    expect(foundUser?._id).toBe(insertResult.insertedId);
   });
 });
 ```
 
 ### Testing Best Practices
 
-- **Test one thing** per test case
-- **Use descriptive test names** that explain the scenario
-- **Arrange-Act-Assert** pattern
-- **Test edge cases** and error conditions
-- **Mock external dependencies** when appropriate
-- **Clean up test data** after each test
+**Current Status**: Testing infrastructure needs to be established. Priorities for testing setup:
 
-### Test Coverage
+1. **Choose a testing framework** (Jest, Vitest, or Node.js built-in test runner)
+2. **Set up test scripts** in package.json
+3. **Create test utilities** for database setup/teardown
+4. **Add CI/CD integration** for automated testing
 
-- **Aim for 90%+ coverage** for new features
-- **Test public APIs** thoroughly
-- **Test error handling** paths
-- **Test performance** for critical operations
+**When implementing tests, follow these guidelines**:
+
+- **Test one behavior** per test case
+- **Use descriptive test names** that explain the scenario and expected outcome
+- **Follow Arrange-Act-Assert** pattern for clarity
+- **Test edge cases** and error conditions (invalid inputs, network failures, etc.)
+- **Use in-memory databases** for faster test execution
+- **Clean up test data** after each test to prevent interference
+- **Test concurrency scenarios** for multi-user database operations
+
+### Test Coverage Goals
+
+- **Core functionality**: 95%+ coverage for database operations
+- **Public APIs**: 100% coverage for all exported functions and classes
+- **Error handling**: Test all error paths and exception scenarios
+- **Performance**: Benchmark tests for critical operations
+- **Integration**: End-to-end tests for complete workflows
+
+**Priority testing areas**:
+
+1. CRUD operations (insert, find, update, delete)
+2. Query builder functionality
+3. Schema validation
+4. Encryption/decryption
+5. File storage operations
+6. Error handling and edge cases
 
 ## 📚 Documentation Standards
 
@@ -207,11 +253,20 @@ export async function createDatabase(
 
 ### Before Submitting
 
-1. **Ensure tests pass** locally
-2. **Update documentation** if needed
-3. **Add tests** for new functionality
-4. **Check code style** with linting
-5. **Rebase on main** to avoid conflicts
+1. **Run type checking**: `pnpm type-check` must pass without errors
+2. **Check code style**: `pnpm lint` and `pnpm format:check` must pass
+3. **Test manually**: Run relevant examples to verify functionality
+4. **Update documentation** if APIs changed
+5. **Add tests** for new functionality (when testing framework is available)
+6. **Rebase on main** to avoid merge conflicts
+7. **Verify build**: `pnpm build` must succeed
+
+**Manual Testing Checklist**:
+
+- Run affected examples in `/examples` folder
+- Test with different database configurations (encrypted/unencrypted)
+- Verify backward compatibility with existing APIs
+- Test error scenarios and edge cases
 
 ### Pull Request Template
 
@@ -249,10 +304,27 @@ Brief description of changes
 
 ### Review Process
 
-1. **Automated checks** must pass (tests, linting, type checking)
-2. **Code review** by maintainers
-3. **Address feedback** and make requested changes
-4. **Maintainer approval** required for merge
+1. **Automated checks** must pass:
+   - TypeScript compilation (`pnpm type-check`)
+   - Code linting (`pnpm lint`)
+   - Code formatting (`pnpm format:check`)
+   - Successful build (`pnpm build`)
+
+2. **Manual verification**:
+   - Examples run successfully
+   - No breaking changes (unless intentional)
+   - Documentation is accurate and up-to-date
+
+3. **Code review** by maintainers:
+   - Architecture and design review
+   - Code quality and maintainability
+   - Performance implications
+   - Security considerations
+
+4. **Address feedback** and make requested changes
+5. **Maintainer approval** required for merge
+
+**Note**: Once testing infrastructure is established, automated test execution will be added to this process.
 
 ## 🏗️ Architecture Guidelines
 
@@ -290,12 +362,18 @@ We follow [Semantic Versioning](https://semver.org/):
 
 ### Release Checklist
 
-- [ ] All tests passing
-- [ ] Documentation updated
-- [ ] Changelog updated
-- [ ] Version bumped
-- [ ] Release notes written
-- [ ] Examples tested
+- [ ] All automated checks passing (type-check, lint, build)
+- [ ] All examples tested and working
+- [ ] Documentation updated (README, API docs, CHANGELOG)
+- [ ] Version bumped in package.json
+- [ ] Release notes written with:
+  - New features
+  - Bug fixes
+  - Breaking changes (if any)
+  - Migration guide (if needed)
+- [ ] Examples updated for new features
+- [ ] Performance benchmarks run (if applicable)
+- [ ] Security review completed (for encryption/storage changes)
 
 ## 🆘 Getting Help
 
@@ -321,7 +399,6 @@ By contributing to NuboDB, you agree that your contributions will be licensed un
 Contributors will be recognized in:
 
 - **README.md** - for significant contributions
-- **CHANGELOG.md** - for all contributions
 - **GitHub Contributors** - automatically tracked
 
 ---

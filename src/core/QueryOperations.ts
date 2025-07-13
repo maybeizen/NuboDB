@@ -1,11 +1,12 @@
-import {
+import type {
   Document,
   QueryFilter,
   QueryOptions,
   FindResult,
   QueryBuilder,
 } from './types';
-import { BaseCollection, DocumentWithMetadata } from './BaseCollection';
+import type { DocumentWithMetadata } from './BaseCollection';
+import { BaseCollection } from './BaseCollection';
 import { CollectionError } from '../errors/DatabaseError';
 import { QueryBuilder as QueryBuilderImpl } from './QueryBuilder';
 
@@ -354,7 +355,7 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
 
       if (includeFields.length > 0) {
         for (const field of includeFields) {
-          if ((document as any).hasOwnProperty(field)) {
+          if (Object.prototype.hasOwnProperty.call(document, field)) {
             projected[field] = (document as any)[field];
           }
         }

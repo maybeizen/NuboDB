@@ -12,6 +12,10 @@ pids
 *.seed
 *.pid.lock
 
+.cursorrules
+.cursor/
+.claude/
+
 coverage/
 *.lcov
 

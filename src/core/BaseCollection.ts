@@ -1,5 +1,5 @@
-import { Schema, Document, CollectionOptions } from './types';
-import { FileStorage } from '../storage/FileStorage';
+import type { Schema, Document, CollectionOptions } from './types';
+import type { FileStorage } from '../storage/FileStorage';
 import { EncryptionManager } from '../encryption/EncryptionManager';
 import { CollectionError } from '../errors/DatabaseError';
 

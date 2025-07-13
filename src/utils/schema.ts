@@ -1,4 +1,4 @@
-import { Schema, Document } from '../core/types';
+import type { Schema, Document } from '../core/types';
 import { SchemaError } from '../errors/DatabaseError';
 
 /**
@@ -80,6 +80,6 @@ export function applyDefaults(data: any, schema: Schema): any {
 export function sanitizeDocument(
   data: any
 ): Omit<Document, '_id' | '_createdAt' | '_updatedAt'> {
-  const { _id, _createdAt, _updatedAt, ...sanitized } = data;
+  const { _id: _, _createdAt: __, _updatedAt: ___, ...sanitized } = data;
   return sanitized;
 }

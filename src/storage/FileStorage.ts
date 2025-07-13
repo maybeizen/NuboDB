@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { Document, DocumentMetadata } from '../core/types';
+import type { Document, DocumentMetadata } from '../core/types';
 import { StorageError } from '../errors/DatabaseError';
 
 /**
@@ -11,6 +11,7 @@ import { StorageError } from '../errors/DatabaseError';
 export class FileStorage {
   private basePath: string;
   private ensuredDirs: Set<string> = new Set();
+  private readonly MAX_CONCURRENT_FILES = 100;
 
   /**
    * @param basePath - Root directory where all collections will be stored.
@@ -19,7 +20,7 @@ export class FileStorage {
     this.basePath = basePath;
   }
 
-  /** Ensure a directory exists (memoised for performance). */
+  /** Ensure a directory exists */
   async ensureDirectory(path: string): Promise<void> {
     if (this.ensuredDirs.has(path)) return;
 
@@ -57,7 +58,9 @@ export class FileStorage {
   }
 
   /**
-   * Read a single document. Returns `null` if the file doesn't exist.
+   * Read a single document.
+   *
+   * @returns The document or `null` if the file doesn't exist.
    */
   async readDocument(
     collectionPath: string,
@@ -87,7 +90,11 @@ export class FileStorage {
     }
   }
 
-  /** Read every document stored in a collection directory. */
+  /**
+   * Read every document stored in a collection directory.
+   *
+   * @returns An array of documents.
+   */
   async readAllDocuments(collectionPath: string): Promise<Document[]> {
     const fullPath = join(this.basePath, collectionPath);
 
@@ -96,14 +103,22 @@ export class FileStorage {
       const files = await fs.readdir(fullPath);
       const jsonFiles = files.filter(file => file.endsWith('.json'));
 
-      const documents = await Promise.all(
-        jsonFiles.map(async file => {
-          const documentId = file.replace('.json', '');
-          return this.readDocument(collectionPath, documentId);
-        })
-      );
+      const documents: Document[] = [];
 
-      return documents.filter(Boolean) as Document[];
+      for (let i = 0; i < jsonFiles.length; i += this.MAX_CONCURRENT_FILES) {
+        const batch = jsonFiles.slice(i, i + this.MAX_CONCURRENT_FILES);
+
+        const batchResults = await Promise.all(
+          batch.map(async file => {
+            const documentId = file.replace('.json', '');
+            return this.readDocument(collectionPath, documentId);
+          })
+        );
+
+        documents.push(...(batchResults.filter(Boolean) as Document[]));
+      }
+
+      return documents;
     } catch (error) {
       throw new StorageError(
         `Failed to read documents: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -111,7 +126,11 @@ export class FileStorage {
     }
   }
 
-  /** Delete a single document file. Returns `false` if it didn't exist. */
+  /**
+   * Delete a single document file.
+   *
+   * @returns `true` if the document was deleted, `false` if it didn't exist.
+   */
   async deleteDocument(
     collectionPath: string,
     documentId: string
@@ -135,7 +154,11 @@ export class FileStorage {
     }
   }
 
-  /** Check existence of a document without reading it. */
+  /**
+   * Check existence of a document without reading it.
+   *
+   * @returns `true` if the document exists, `false` if it doesn't.
+   */
   async documentExists(
     collectionPath: string,
     documentId: string
@@ -154,7 +177,7 @@ export class FileStorage {
     }
   }
 
-  /** Lightweight metadata fetch that avoids parsing the whole file. */
+  /** Lightweight metadata fetch */
   async getDocumentMetadata(
     collectionPath: string,
     documentId: string

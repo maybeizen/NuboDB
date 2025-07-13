@@ -9,7 +9,6 @@ async function performanceBenchmark() {
   const db = await createDatabase({
     path: './benchmark-db',
     debug: false,
-    maxCacheSize: 10000,
   });
 
   await db.open();

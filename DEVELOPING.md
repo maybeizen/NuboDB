@@ -80,18 +80,59 @@ interface Storage {
 
 ## 🚀 Development Workflow
 
-### 1. Understanding the Codebase
+### 1. Development Environment Setup
+
+```bash
+# Clone and setup
+git clone https://github.com/maybeizen/nubodb.git
+cd nubodb
+pnpm install
+
+# Development commands
+pnpm dev           # Watch mode compilation
+pnpm build         # Build for production
+pnpm type-check    # TypeScript type checking
+pnpm lint          # Code linting
+pnpm lint:fix      # Auto-fix linting issues
+pnpm format        # Format code with Prettier
+pnpm clean         # Clean build artifacts
+
+# Test examples
+pnpm example:basic      # Basic usage
+pnpm example:query      # Query builder
+pnpm example:schema     # Schema validation
+pnpm example:encryption # Encryption features
+```
+
+### 2. Understanding the Codebase
 
 Start by exploring the core files in order:
 
-1. **`types.ts`** - Understand the data structures
-2. **`BaseCollection.ts`** - Foundation functionality
-3. **`DocumentOperations.ts`** - CRUD operations
-4. **`QueryOperations.ts`** - Query functionality
-5. **`Collection.ts`** - Main facade
-6. **`NuboDB.ts`** - Database orchestration
+1. **`types.ts`** - Core type definitions and interfaces
+2. **`BaseCollection.ts`** - Foundation collection functionality
+3. **`DocumentOperations.ts`** - CRUD operations implementation
+4. **`QueryOperations.ts`** - Query and search functionality
+5. **`Collection.ts`** - Public collection facade
+6. **`NuboDB.ts`** - Main database orchestration
+7. **`QueryBuilder.ts`** - Fluent query interface
 
-### 2. Making Changes
+### 3. Current Build Configuration
+
+**TypeScript Configuration** (`tsconfig.json`):
+
+- Target: ES2022
+- Module: CommonJS (for Node.js compatibility)
+- Strict mode enabled with comprehensive type checking
+- Declaration files generated for npm distribution
+
+**Build Tool** (`tsup.config.ts`):
+
+- Uses `tsup` for fast TypeScript bundling
+- Generates both CommonJS and ESM outputs
+- Source maps included for debugging
+- Declaration files for TypeScript users
+
+### 4. Making Changes
 
 #### Adding New Features
 
@@ -129,69 +170,256 @@ case '$regex':
   return this.evaluateRegex(fieldValue, operatorValue);
 ```
 
-### 3. Testing Strategy
+### 5. Testing Strategy
 
-#### Unit Tests
+**⚠️ Current Status**: NuboDB lacks a formal testing framework. This is a high-priority item for contributors!
 
-Test individual components in isolation:
+**Immediate Testing Needs**:
+
+1. **Choose testing framework**: Jest, Vitest, or Node.js built-in test runner
+2. **Setup test configuration**: Add test scripts to package.json
+3. **Create test utilities**: Database setup/teardown helpers
+4. **Implement core tests**: CRUD operations, query builder, schema validation
+
+**Manual Testing Current Approach**:
+
+```bash
+# Test core functionality by running examples
+pnpm example:basic      # Test basic CRUD operations
+pnpm example:query      # Test query builder
+pnpm example:schema     # Test schema validation
+pnpm example:encryption # Test encryption features
+pnpm example:performance # Test performance scenarios
+```
+
+#### Proposed Unit Testing Structure
+
+**When testing framework is implemented**:
 
 ```typescript
+// Example test structure for DocumentOperations
+import { DocumentOperations } from '../src/core/DocumentOperations';
+import { createMockStorage } from './utils/mockStorage';
+
 describe('DocumentOperations', () => {
   let docOps: DocumentOperations;
-  let mockStorage: jest.Mocked<Storage>;
+  let mockStorage: MockStorage;
 
   beforeEach(() => {
     mockStorage = createMockStorage();
-    docOps = new DocumentOperations('test', mockStorage);
+    docOps = new DocumentOperations('test-collection', mockStorage, {});
   });
 
-  it('should insert document with generated ID', async () => {
-    const result = await docOps.insert({ name: 'Test' });
-    expect(result.id).toBeDefined();
-    expect(result.document.name).toBe('Test');
-  });
-});
-```
+  describe('insert', () => {
+    it('should insert document with generated ID', async () => {
+      const testData = { name: 'Test User', email: 'test@example.com' };
 
-#### Integration Tests
+      const result = await docOps.insert(testData);
 
-Test component interactions:
+      expect(result.insertedId).toBeDefined();
+      expect(result.success).toBe(true);
+      expect(mockStorage.write).toHaveBeenCalled();
+    });
 
-```typescript
-describe('Collection Integration', () => {
-  it('should handle full CRUD cycle', async () => {
-    const collection = new Collection('test', storage);
+    it('should apply schema validation when schema is provided', async () => {
+      // Test schema validation logic
+    });
 
-    // Create
-    const insertResult = await collection.insert({ name: 'Test' });
+    it('should handle insertion errors gracefully', async () => {
+      mockStorage.write.mockRejectedValue(new Error('Storage error'));
 
-    // Read
-    const found = await collection.findById(insertResult.id);
-    expect(found.name).toBe('Test');
-
-    // Update
-    await collection.update({ _id: insertResult.id }, { name: 'Updated' });
-
-    // Delete
-    await collection.delete({ _id: insertResult.id });
+      await expect(docOps.insert({ name: 'Test' })).rejects.toThrow(
+        'Storage error'
+      );
+    });
   });
 });
 ```
 
-#### Performance Tests
+#### Proposed Integration Testing
 
-Test critical performance paths:
+**Full CRUD cycle testing**:
 
 ```typescript
-describe('Performance', () => {
-  it('should handle bulk insert efficiently', async () => {
-    const start = Date.now();
-    const data = Array.from({ length: 1000 }, (_, i) => ({ id: i }));
+// Integration test for complete workflows
+import { createDatabase } from '../src';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
-    await collection.insertMany(data);
+describe('NuboDB Integration', () => {
+  let db: NuboDB;
+  let testDbPath: string;
 
-    const duration = Date.now() - start;
-    expect(duration).toBeLessThan(1000); // Should complete in < 1s
+  beforeEach(async () => {
+    testDbPath = join(tmpdir(), `nubodb-test-${Date.now()}`);
+    db = await createDatabase({ path: testDbPath });
+    await db.open();
+  });
+
+  afterEach(async () => {
+    await db.close();
+    // Clean up test database files
+  });
+
+  describe('Full CRUD Lifecycle', () => {
+    it('should handle complete document lifecycle', async () => {
+      const users = db.collection('users');
+
+      // Create
+      const insertResult = await users.insert({
+        name: 'John Doe',
+        email: 'john@example.com',
+        age: 30,
+      });
+
+      expect(insertResult.success).toBe(true);
+      expect(insertResult.insertedId).toBeDefined();
+
+      // Read
+      const foundUser = await users.findById(insertResult.insertedId);
+      expect(foundUser).toBeTruthy();
+      expect(foundUser?.name).toBe('John Doe');
+
+      // Update
+      const updateResult = await users.update(
+        { _id: insertResult.insertedId },
+        { age: 31, lastLogin: new Date() }
+      );
+
+      expect(updateResult.success).toBe(true);
+      expect(updateResult.modifiedCount).toBe(1);
+
+      // Verify update
+      const updatedUser = await users.findById(insertResult.insertedId);
+      expect(updatedUser?.age).toBe(31);
+
+      // Delete
+      const deleteResult = await users.delete({ _id: insertResult.insertedId });
+      expect(deleteResult.success).toBe(true);
+      expect(deleteResult.deletedCount).toBe(1);
+
+      // Verify deletion
+      const deletedUser = await users.findById(insertResult.insertedId);
+      expect(deletedUser).toBeNull();
+    });
+  });
+
+  describe('Query Builder Integration', () => {
+    it('should handle complex queries', async () => {
+      const users = db.collection('users');
+
+      // Insert test data
+      await users.insertMany([
+        { name: 'Alice', age: 25, status: 'active' },
+        { name: 'Bob', age: 30, status: 'inactive' },
+        { name: 'Charlie', age: 35, status: 'active' },
+      ]);
+
+      // Complex query
+      const results = await users
+        .query()
+        .where('age', '$gte', 25)
+        .and('status', '$eq', 'active')
+        .sort('age', 1)
+        .limit(10)
+        .execute();
+
+      expect(results.documents).toHaveLength(2);
+      expect(results.documents[0].name).toBe('Alice');
+      expect(results.documents[1].name).toBe('Charlie');
+    });
+  });
+});
+```
+
+#### Proposed Performance Testing
+
+**Benchmark critical operations**:
+
+```typescript
+// Performance and load testing
+describe('Performance Benchmarks', () => {
+  let db: NuboDB;
+  let collection: Collection;
+
+  beforeEach(async () => {
+    db = await createDatabase({
+      path: './perf-test-db',
+      cacheDocuments: true,
+      maxCacheSize: 1000,
+    });
+    await db.open();
+    collection = db.collection('benchmark');
+  });
+
+  describe('Bulk Operations', () => {
+    it('should handle bulk insert efficiently', async () => {
+      const testData = Array.from({ length: 1000 }, (_, i) => ({
+        id: i,
+        name: `User ${i}`,
+        email: `user${i}@example.com`,
+        data: 'x'.repeat(100), // ~100 bytes per doc
+      }));
+
+      const start = performance.now();
+      const result = await collection.insertMany(testData);
+      const duration = performance.now() - start;
+
+      expect(result.insertedIds).toHaveLength(1000);
+      expect(duration).toBeLessThan(5000); // Should complete in < 5s
+
+      console.log(`Bulk insert: ${duration.toFixed(2)}ms for 1000 documents`);
+    });
+
+    it('should handle large queries efficiently', async () => {
+      // Insert test data first
+      const testData = Array.from({ length: 5000 }, (_, i) => ({
+        index: i,
+        category: i % 10,
+        active: i % 2 === 0,
+      }));
+
+      await collection.insertMany(testData);
+
+      const start = performance.now();
+      const results = await collection.find({
+        category: { $in: [1, 3, 5] },
+        active: true,
+      });
+      const duration = performance.now() - start;
+
+      expect(results.total).toBeGreaterThan(0);
+      expect(duration).toBeLessThan(1000); // Should complete in < 1s
+
+      console.log(
+        `Query: ${duration.toFixed(2)}ms for ${results.total} results`
+      );
+    });
+  });
+
+  describe('Memory Usage', () => {
+    it('should not leak memory during operations', async () => {
+      const initialMemory = process.memoryUsage().heapUsed;
+
+      // Perform many operations
+      for (let i = 0; i < 100; i++) {
+        await collection.insert({ iteration: i, data: 'x'.repeat(1000) });
+        if (i % 10 === 0) {
+          collection.clearCache();
+        }
+      }
+
+      // Force garbage collection if available
+      if (global.gc) {
+        global.gc();
+      }
+
+      const finalMemory = process.memoryUsage().heapUsed;
+      const memoryIncrease = finalMemory - initialMemory;
+
+      // Memory increase should be reasonable (less than 50MB for this test)
+      expect(memoryIncrease).toBeLessThan(50 * 1024 * 1024);
+    });
   });
 });
 ```
@@ -382,6 +610,51 @@ class IndexManager {
 
 ## 🧪 Testing Infrastructure
 
+**Current Status**: No testing framework is currently configured. This is a critical gap that needs immediate attention.
+
+### Recommended Testing Setup
+
+**1. Choose and Configure Testing Framework**:
+
+```bash
+# Option A: Jest (most popular)
+pnpm add -D jest @types/jest ts-jest
+
+# Option B: Vitest (faster, Vite-based)
+pnpm add -D vitest @vitest/ui
+
+# Option C: Node.js built-in test runner (Node 18+)
+# No additional dependencies needed
+```
+
+**2. Add Test Scripts to package.json**:
+
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --watchAll=false"
+  }
+}
+```
+
+**3. Create Jest Configuration** (`jest.config.js`):
+
+```javascript
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  roots: ['<rootDir>/src', '<rootDir>/test'],
+  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/index.ts'],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+};
+```
+
 ### Test Utilities
 
 ```typescript
@@ -460,39 +733,164 @@ class MetricsCollector {
 
 ## 🔄 Continuous Integration
 
-### GitHub Actions Workflow
+**Current Status**: No CI/CD pipeline is currently configured.
+
+### Recommended GitHub Actions Workflow
+
+Create `.github/workflows/ci.yml`:
 
 ```yaml
-# .github/workflows/ci.yml
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
+    name: Test
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
 
-      - run: pnpm install
-      - run: pnpm build
-      - run: pnpm test
-      - run: pnpm type-check
-      - run: pnpm lint
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Build
+        run: pnpm build
+
+      # TODO: Add when tests are implemented
+      # - name: Run tests
+      #   run: pnpm test:ci
+
+      - name: Test examples
+        run: |
+          pnpm example:basic
+          pnpm example:query
+          pnpm example:schema
+          pnpm example:encryption
+
+      # TODO: Add when tests are implemented
+      # - name: Upload coverage
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     file: ./coverage/lcov.info
+
+  publish:
+    name: Publish
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      # TODO: Add automatic publishing logic
+      # - name: Publish to npm
+      #   run: pnpm publish --no-git-checks
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+### Additional CI/CD Enhancements
+
+**Security Scanning** (`.github/workflows/security.yml`):
+
+```yaml
+name: Security
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0' # Weekly
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - run: npm audit --audit-level=moderate
+
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v2
+        with:
+          languages: typescript
+      - uses: github/codeql-action/analyze@v2
 ```
 
 ## 📚 Resources
 
 ### Internal Documentation
 
-- **API Reference** - `docs/API.md`
-- **Architecture Guide** - `docs/ARCHITECTURE.md`
-- **Performance Guide** - `docs/PERFORMANCE.md`
+**Current Status**: Documentation is primarily in README.md and this DEVELOPING.md file.
+
+**Recommended Documentation Structure**:
+
+```
+docs/
+├── API.md              # Complete API reference
+├── ARCHITECTURE.md     # Detailed architecture guide
+├── PERFORMANCE.md      # Performance optimization guide
+├── SECURITY.md         # Security best practices
+├── MIGRATION.md        # Migration guides between versions
+├── EXAMPLES.md         # Extended examples and tutorials
+└── TROUBLESHOOTING.md  # Common issues and solutions
+```
+
+**Current Documentation**:
+
+- **README.md** - Main project documentation with examples
+- **CONTRIBUTING.md** - Contribution guidelines and standards
+- **DEVELOPING.md** - This file - internal development guide
+- **docs/API.md** - Basic API reference (needs expansion)
+- **examples/** - Working code examples for all features
 
 ### External Resources
 
