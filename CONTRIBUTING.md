@@ -2,11 +2,11 @@
 
 Thank you for your interest in contributing to NuboDB! This document provides guidelines and information for contributors.
 
-## 🤝 How to Contribute
+## How to Contribute
 
 We welcome contributions from the community! Here are the main ways you can contribute:
 
-### 🐛 Bug Reports
+### Bug Reports
 
 - **Check existing issues** first to avoid duplicates
 - **Use the bug report template** when creating a new issue
@@ -16,14 +16,14 @@ We welcome contributions from the community! Here are the main ways you can cont
   - Environment details (OS, Node.js version, etc.)
   - Error messages and stack traces
 
-### 💡 Feature Requests
+### Feature Requests
 
 - **Describe the feature** clearly and concisely
 - **Explain the use case** and why it would be valuable
 - **Consider implementation complexity** and impact
 - **Check if it aligns** with NuboDB's goals and architecture
 
-### 🔧 Code Contributions
+### Code Contributions
 
 - **Fork the repository** and create a feature branch
 - **Follow the coding standards** outlined below
@@ -31,7 +31,7 @@ We welcome contributions from the community! Here are the main ways you can cont
 - **Update documentation** as needed
 - **Submit a pull request** with a clear description
 
-## 🛠️ Development Setup
+## Development Setup
 
 ### Prerequisites
 
@@ -93,7 +93,7 @@ pnpm clean              # or npm run clean
 
 **Note**: Currently, there are no test scripts configured. Contributors are encouraged to add testing infrastructure.
 
-## 📝 Coding Standards
+## Coding Standards
 
 ### TypeScript Guidelines
 
@@ -133,7 +133,7 @@ src/
 - **kebab-case** for file names
 - **Descriptive names** that explain purpose
 
-## 🧪 Testing Guidelines
+## Testing Guidelines
 
 ### Test Structure
 
@@ -216,7 +216,7 @@ describe('Database Operations', () => {
 5. File storage operations
 6. Error handling and edge cases
 
-## 📚 Documentation Standards
+## Documentation Standards
 
 ### Code Documentation
 
@@ -249,7 +249,7 @@ export async function createDatabase(
 - **Update configuration** options
 - **Include code examples** for new functionality
 
-## 🔄 Pull Request Process
+## Pull Request Process
 
 ### Before Submitting
 
@@ -326,7 +326,7 @@ Brief description of changes
 
 **Note**: Once testing infrastructure is established, automated test execution will be added to this process.
 
-## 🏗️ Architecture Guidelines
+## Architecture Guidelines
 
 ### Modular Design
 
@@ -350,7 +350,7 @@ Brief description of changes
 - **Error handling** without exposing internals
 - **Access control** where appropriate
 
-## 🚀 Release Process
+## Release Process
 
 ### Versioning
 
@@ -375,7 +375,7 @@ We follow [Semantic Versioning](https://semver.org/):
 - [ ] Performance benchmarks run (if applicable)
 - [ ] Security review completed (for encryption/storage changes)
 
-## 🆘 Getting Help
+## Getting Help
 
 ### Communication Channels
 
@@ -390,11 +390,11 @@ We follow [Semantic Versioning](https://semver.org/):
 - **TypeScript Config** - see `tsconfig.json`
 - **Build Config** - see `tsup.config.ts`
 
-## 📋 Contributor License Agreement
+## Contributor License Agreement
 
 By contributing to NuboDB, you agree that your contributions will be licensed under the same license as the project (MIT License).
 
-## 🙏 Recognition
+## Recognition
 
 Contributors will be recognized in:
 
@@ -403,4 +403,4 @@ Contributors will be recognized in:
 
 ---
 
-Thank you for contributing to NuboDB! Your help makes this project better for everyone. 🚀
+Thank you for contributing to NuboDB! Your help makes this project better for everyone.

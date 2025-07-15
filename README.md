@@ -56,7 +56,7 @@ console.log('Adult users:', adults.documents.length);
 await db.close();
 ```
 
-## 📚 Examples
+## Examples
 
 Check out the comprehensive examples in the `/examples` folder:
 
