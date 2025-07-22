@@ -1,6 +1,6 @@
 {
   "name": "nubodb",
-  "version": "1.3.0-alpha",
+  "version": "1.3.1-alpha",
   "description": "A modern, fast, and feature-rich NoSQL database for Node.js with TypeScript support, encryption, schema validation, and modular architecture.",
   "type": "module",
   "main": "dist/index.js",
