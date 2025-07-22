@@ -9,7 +9,6 @@ import type { DocumentWithMetadata } from './BaseCollection';
 import { BaseCollection } from './BaseCollection';
 import { CollectionError } from '../errors/DatabaseError';
 import { QueryBuilder as QueryBuilderImpl } from './QueryBuilder';
-import { filterDocumentsNative, isNativeAvailable } from '../native/index.js';
 
 /**
  * @typeParam T - Document type for this collection
@@ -47,10 +46,7 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
       const total = filteredDocuments.length;
 
       if (options.sort && filteredDocuments.length > 1) {
-        filteredDocuments = this.sortDocuments(
-          filteredDocuments,
-          options.sort
-        );
+        filteredDocuments = this.sortDocuments(filteredDocuments, options.sort);
       }
 
       if (options.projection) {
@@ -150,13 +146,6 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     filter: QueryFilter,
     maxResults: number
   ): T[] {
-    if (isNativeAvailable && Object.keys(filter).length > 0) {
-      try {
-        return filterDocumentsNative(documents, filter, maxResults);
-      } catch (error) {
-        console.warn('Native filtering failed, using fallback:', error);
-      }
-    }
     const results: T[] = [];
     const filterEntries = Object.entries(filter);
 
@@ -175,10 +164,7 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param document - Document to check
    * @param filterEntries - Query filter entries
    */
-  private matchesFilter(
-    document: T,
-    filterEntries: [string, any][]
-  ): boolean {
+  private matchesFilter(document: T, filterEntries: [string, any][]): boolean {
     for (const [field, value] of filterEntries) {
       if (field.startsWith('$')) {
         if (!this.matchesLogicalOperator(document, field, value as any[])) {
@@ -232,10 +218,7 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param value - Document field value
    * @param operators - Comparison operators to apply
    */
-  private matchesComparisonOperators(
-    value: any,
-    operators: any
-  ): boolean {
+  private matchesComparisonOperators(value: any, operators: any): boolean {
     const operatorEntries = Object.entries(operators);
 
     for (const [operator, operatorValue] of operatorEntries) {
@@ -388,5 +371,4 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     }
     return documents;
   }
-
 }

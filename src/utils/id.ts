@@ -1,17 +1,9 @@
 import { randomBytes } from 'crypto';
-import { generateIdNative, isNativeAvailable } from '../native/index.js';
 
 /**
  * @returns A unique string identifier
  */
 export function generateId(): string {
-  if (isNativeAvailable) {
-    try {
-      return generateIdNative();
-    } catch (error) {
-      console.warn('Native ID generation failed, using fallback:', error);
-    }
-  }
   return randomBytes(16).toString('hex');
 }
 
