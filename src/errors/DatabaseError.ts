@@ -1,15 +1,13 @@
 /**
- * Base error class for all database-related errors.
+ * Base error class for all database-related errors
  */
 export class DatabaseError extends Error {
   public readonly code: string;
   public readonly details?: any;
 
   /**
-   * Create a new database error.
-   *
-   * @param message - Error message.
-   * @param code    - Error code for programmatic handling.
+   * @param message - Error message
+   * @param code - Error code for programmatic handling
    */
   constructor(message: string, code: string, details?: any) {
     super(message);
@@ -20,7 +18,7 @@ export class DatabaseError extends Error {
 }
 
 /**
- * Error thrown when collection operations fail.
+ * Error thrown when collection operations fail
  */
 export class CollectionError extends DatabaseError {
   constructor(message: string, details?: any) {
@@ -30,7 +28,7 @@ export class CollectionError extends DatabaseError {
 }
 
 /**
- * Error thrown when document operations fail.
+ * Error thrown when document operations fail
  */
 export class DocumentError extends DatabaseError {
   constructor(message: string, details?: any) {

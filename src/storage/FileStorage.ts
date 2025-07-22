@@ -4,9 +4,7 @@ import type { Document, DocumentMetadata } from '../core/types';
 import { StorageError } from '../errors/DatabaseError';
 
 /**
- * Thin wrapper around the Node.js `fs` module that provides collection-aware
- * persistence utilities. Documents are stored as individual JSON files inside
- * a directory named after the collection.
+ * Collection-aware file storage engine
  */
 export class FileStorage {
   private basePath: string;
@@ -14,7 +12,7 @@ export class FileStorage {
   private readonly MAX_CONCURRENT_FILES = 100;
 
   /**
-   * @param basePath - Root directory where all collections will be stored.
+   * @param basePath - Root directory where all collections will be stored
    */
   constructor(basePath: string) {
     this.basePath = basePath;
@@ -34,10 +32,8 @@ export class FileStorage {
   }
 
   /**
-   * Persist a single document.
-   *
-   * @param collectionPath - Collection folder relative to `basePath`.
-   * @param document       - Document with metadata to write.
+   * @param collectionPath - Collection folder relative to basePath
+   * @param document - Document with metadata to write
    */
   async writeDocument(
     collectionPath: string,
@@ -58,9 +54,7 @@ export class FileStorage {
   }
 
   /**
-   * Read a single document.
-   *
-   * @returns The document or `null` if the file doesn't exist.
+   * @returns The document or null if the file doesn't exist
    */
   async readDocument(
     collectionPath: string,
@@ -91,9 +85,7 @@ export class FileStorage {
   }
 
   /**
-   * Read every document stored in a collection directory.
-   *
-   * @returns An array of documents.
+   * @returns An array of documents
    */
   async readAllDocuments(collectionPath: string): Promise<Document[]> {
     const fullPath = join(this.basePath, collectionPath);
@@ -127,9 +119,7 @@ export class FileStorage {
   }
 
   /**
-   * Delete a single document file.
-   *
-   * @returns `true` if the document was deleted, `false` if it didn't exist.
+   * @returns true if the document was deleted, false if it didn't exist
    */
   async deleteDocument(
     collectionPath: string,
@@ -155,9 +145,7 @@ export class FileStorage {
   }
 
   /**
-   * Check existence of a document without reading it.
-   *
-   * @returns `true` if the document exists, `false` if it doesn't.
+   * @returns true if the document exists, false if it doesn't
    */
   async documentExists(
     collectionPath: string,

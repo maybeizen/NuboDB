@@ -7,18 +7,15 @@ import {
 import { EncryptionError } from '../errors/DatabaseError';
 
 /**
- * Handles encryption and decryption of data using AES-256 with PBKDF2 key derivation.
- * Provides both string and object encryption utilities.
+ * Handles encryption and decryption of data using AES-256 with PBKDF2 key derivation
  */
 export class EncryptionManager {
   private key: Buffer;
   private algorithm: string;
 
   /**
-   * Initialize encryption manager with a key and algorithm.
-   *
-   * @param encryptionKey - Password/key for encryption.
-   * @param algorithm     - Encryption algorithm (default: aes-256-cbc).
+   * @param encryptionKey - Password/key for encryption
+   * @param algorithm - Encryption algorithm (default: aes-256-cbc)
    */
   constructor(encryptionKey: string, algorithm: string = 'aes-256-cbc') {
     this.algorithm = algorithm;
@@ -26,10 +23,8 @@ export class EncryptionManager {
   }
 
   /**
-   * Derive encryption key from password using PBKDF2.
-   *
-   * @param password - Password to derive key from.
-   * @param salt     - Optional salt (generates random if not provided).
+   * @param password - Password to derive key from
+   * @param salt - Optional salt (generates random if not provided)
    */
   private deriveKey(password: string, salt?: string): Buffer {
     const saltBuffer = salt ? Buffer.from(salt, 'hex') : randomBytes(16);
@@ -38,10 +33,8 @@ export class EncryptionManager {
   }
 
   /**
-   * Encrypt a string using AES-256-CBC.
-   *
-   * @param data - String to encrypt.
-   * @returns Encrypted data in format "iv:encrypted".
+   * @param data - String to encrypt
+   * @returns Encrypted data in format "iv:encrypted"
    */
   encrypt(data: string): string {
     try {
@@ -60,10 +53,8 @@ export class EncryptionManager {
   }
 
   /**
-   * Decrypt a string that was encrypted with this manager.
-   *
-   * @param encryptedData - Encrypted data in "iv:encrypted" format.
-   * @returns Decrypted string.
+   * @param encryptedData - Encrypted data in "iv:encrypted" format
+   * @returns Decrypted string
    */
   decrypt(encryptedData: string): string {
     try {
@@ -94,10 +85,8 @@ export class EncryptionManager {
   }
 
   /**
-   * Encrypt a JavaScript object by serializing to JSON first.
-   *
-   * @param obj - Object to encrypt.
-   * @returns Encrypted JSON string.
+   * @param obj - Object to encrypt
+   * @returns Encrypted JSON string
    */
   encryptObject(obj: any): string {
     const jsonString = JSON.stringify(obj);
@@ -105,10 +94,8 @@ export class EncryptionManager {
   }
 
   /**
-   * Decrypt and deserialize a JavaScript object.
-   *
-   * @param encryptedData - Encrypted JSON string.
-   * @returns Decrypted object.
+   * @param encryptedData - Encrypted JSON string
+   * @returns Decrypted object
    */
   decryptObject(encryptedData: string): any {
     const decryptedString = this.decrypt(encryptedData);

@@ -19,20 +19,15 @@ import { DocumentError } from '../errors/DatabaseError';
 import { QueryOperations } from './QueryOperations';
 
 /**
- * Handles all document modification operations (CRUD) for a collection.
- * Extends BaseCollection to inherit caching, indexing, and initialization.
- *
- * @typeParam T - Document type for this collection.
+ * @typeParam T - Document type for this collection
  */
 export class DocumentOperations<T = Document> extends BaseCollection<T> {
   private queryOps: QueryOperations<T>;
 
   /**
-   * Create document operations for a collection.
-   *
-   * @param name    - Collection name.
-   * @param storage - Storage engine instance.
-   * @param options - Collection configuration.
+   * @param name - Collection name
+   * @param storage - Storage engine instance
+   * @param options - Collection configuration
    */
   constructor(name: string, storage: any, options: any = {}) {
     super(name, storage, options);
@@ -40,10 +35,8 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
   }
 
   /**
-   * Insert a single document with validation and metadata.
-   *
-   * @param data - Document data to insert.
-   * @returns Insert result with generated ID and document.
+   * @param data - Document data to insert
+   * @returns Insert result with generated ID and document
    */
   async insert(data: Partial<T>): Promise<InsertResult> {
     await this.ensureInitialized();
@@ -99,10 +92,8 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
   }
 
   /**
-   * Insert multiple documents in a single operation.
-   *
-   * @param documents - Array of documents to insert.
-   * @returns Bulk insert result with IDs and count.
+   * @param documents - Array of documents to insert
+   * @returns Bulk insert result with IDs and count
    */
   async insertMany(documents: Partial<T>[]): Promise<InsertManyResult> {
     await this.ensureInitialized();
@@ -169,11 +160,9 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
   }
 
   /**
-   * Update all documents matching a filter.
-   *
-   * @param filter     - Query filter to match documents.
-   * @param updateData - Fields to update in matching documents.
-   * @returns Update result with modified count.
+   * @param filter - Query filter to match documents
+   * @param updateData - Fields to update in matching documents
+   * @returns Update result with modified count
    */
   async update(
     filter: QueryFilter,
@@ -230,11 +219,9 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
   }
 
   /**
-   * Update existing documents or insert new one if none match.
-   *
-   * @param filter     - Query filter to match documents.
-   * @param updateData - Data to update or insert.
-   * @returns Update result with upsert information.
+   * @param filter - Query filter to match documents
+   * @param updateData - Data to update or insert
+   * @returns Update result with upsert information
    */
   async upsert(
     filter: QueryFilter,
@@ -256,10 +243,8 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
   }
 
   /**
-   * Delete all documents matching a filter.
-   *
-   * @param filter - Query filter to match documents for deletion.
-   * @returns Delete result with deleted count.
+   * @param filter - Query filter to match documents for deletion
+   * @returns Delete result with deleted count
    */
   async delete(filter: QueryFilter): Promise<DeleteResult> {
     await this.ensureInitialized();
@@ -298,10 +283,8 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
   }
 
   /**
-   * Delete the first document that matches a filter.
-   *
-   * @param filter - Query filter to match document for deletion.
-   * @returns Delete result with deleted count (0 or 1).
+   * @param filter - Query filter to match document for deletion
+   * @returns Delete result with deleted count (0 or 1)
    */
   async deleteOne(filter: QueryFilter): Promise<DeleteResult> {
     const document = await this.queryOps.findOne(filter);
@@ -314,9 +297,7 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
   }
 
   /**
-   * Manually create an index on specified fields.
-   *
-   * @param definition - Index definition with fields and options.
+   * @param definition - Index definition with fields and options
    */
   async createIndex(definition: IndexDefinition): Promise<void> {
     await this.ensureInitialized();

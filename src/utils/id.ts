@@ -1,27 +1,29 @@
 import { randomBytes } from 'crypto';
+import { generateIdNative, isNativeAvailable } from '../native/index.js';
 
 /**
- * Generate a unique document ID using crypto.randomUUID().
- *
- * @returns A unique string identifier.
+ * @returns A unique string identifier
  */
 export function generateId(): string {
+  if (isNativeAvailable) {
+    try {
+      return generateIdNative();
+    } catch (error) {
+      console.warn('Native ID generation failed, using fallback:', error);
+    }
+  }
   return randomBytes(16).toString('hex');
 }
 
 /**
- * Get the current timestamp as a Date object.
- *
- * @returns Current date and time.
+ * @returns Current date and time
  */
 export function generateTimestamp(): Date {
   return new Date();
 }
 
 /**
- * Create metadata for a new document.
- *
- * @returns Object with ID and timestamps.
+ * @returns Object with ID and timestamps
  */
 export function createDocumentMetadata(id?: string): {
   id: string;

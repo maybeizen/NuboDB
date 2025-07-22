@@ -2,11 +2,8 @@ import type { Schema, Document } from '../core/types';
 import { SchemaError } from '../errors/DatabaseError';
 
 /**
- * Validate document data against a schema definition.
- *
- * @param data   - Document data to validate.
- * @param schema - Schema definition to validate against.
- * @throws Error if validation fails.
+ * @param data - Document data to validate
+ * @param schema - Schema definition to validate against
  */
 export function validateSchema(data: any, schema: Schema): void {
   for (const [fieldName, fieldSchema] of Object.entries(schema)) {
@@ -53,11 +50,9 @@ export function validateFieldType(value: any, expectedType: string): boolean {
 }
 
 /**
- * Apply default values from schema to document data.
- *
- * @param data   - Document data.
- * @param schema - Schema with default values.
- * @returns Data with defaults applied.
+ * @param data - Document data
+ * @param schema - Schema with default values
+ * @returns Data with defaults applied
  */
 export function applyDefaults(data: any, schema: Schema): any {
   const result = { ...data };
@@ -72,14 +67,13 @@ export function applyDefaults(data: any, schema: Schema): any {
 }
 
 /**
- * Remove undefined values and sanitize document data.
- *
- * @param data - Raw document data.
- * @returns Sanitized document data.
+ * @param data - Raw document data
+ * @returns Sanitized document data
  */
 export function sanitizeDocument(
   data: any
 ): Omit<Document, '_id' | '_createdAt' | '_updatedAt'> {
-  const { _id: _, _createdAt: __, _updatedAt: ___, ...sanitized } = data;
+  const { _id, _createdAt, _updatedAt, ...sanitized } = data;
+  void _id; void _createdAt; void _updatedAt;
   return sanitized;
 }

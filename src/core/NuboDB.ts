@@ -12,8 +12,7 @@ import { DatabaseError } from '../errors/DatabaseError';
 import { EventEmitter } from 'events';
 
 /**
- * Main database instance that manages collections and provides the public API.
- * Implements the singleton pattern for global database access.
+ * Main database instance that manages collections and provides the public API
  */
 class NuboDB extends EventEmitter {
   private static instance: NuboDB | null = null;
@@ -26,9 +25,7 @@ class NuboDB extends EventEmitter {
   private logger: any;
 
   /**
-   * Private constructor for singleton pattern.
-   *
-   * @param options - Database configuration including storage path, encryption, etc.
+   * @param options - Database configuration
    */
   private constructor(options: DatabaseOptions) {
     super();
@@ -63,9 +60,7 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Get the singleton database instance. Creates one if it doesn't exist.
-   *
-   * @param options - Required for first initialization.
+   * @param options - Required for first initialization
    */
   public static async getInstance(options?: DatabaseOptions): Promise<NuboDB> {
     if (!NuboDB.instance) {
@@ -81,24 +76,14 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Create a new database instance (bypasses singleton).
-   *
-   * @param options - Database configuration.
+   * @param options - Database configuration
    */
   public static async create(options: DatabaseOptions): Promise<NuboDB> {
     return new NuboDB(options);
   }
 
   /**
-   * Initialize the database and create storage directories.
-   *
-   * @throws {DatabaseError} When database fails to open or is already open.
-   * @example
-   * ```typescript
-   * const db = await NuboDB.create({ path: './mydb' });
-   * await db.open();
-   * ```
-   * @since 1.0.0
+   * Initialize the database and create storage directories
    */
   public async open(): Promise<void> {
     if (this.isOpen) {
@@ -120,14 +105,7 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Clean up resources and close all collections.
-   *
-   * @throws {DatabaseError} When database fails to close properly.
-   * @example
-   * ```typescript
-   * await db.close();
-   * ```
-   * @since 1.0.0
+   * Clean up resources and close all collections
    */
   public async close(): Promise<void> {
     if (!this.isOpen) {
@@ -154,11 +132,9 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Get or create a collection by name.
-   *
-   * @param name    - Collection name.
-   * @param options - Optional collection-specific settings.
-   * @returns Collection instance for CRUD operations.
+   * @param name - Collection name
+   * @param options - Optional collection-specific settings
+   * @returns Collection instance for CRUD operations
    */
   public collection<T = any>(
     name: string,
@@ -197,11 +173,9 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Explicitly create a new collection with optional schema.
-   *
-   * @param name    - Collection name.
-   * @param schema  - Optional schema for validation.
-   * @param options - Collection configuration.
+   * @param name - Collection name
+   * @param schema - Optional schema for validation
+   * @param options - Collection configuration
    */
   public async createCollection<T = any>(
     name: string,
@@ -246,10 +220,8 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Delete all documents in a collection and remove it from memory.
-   *
-   * @param name - Collection to drop.
-   * @returns Success status.
+   * @param name - Collection to drop
+   * @returns Success status
    */
   public async dropCollection(name: string): Promise<boolean> {
     if (!this.isOpen) {
@@ -282,16 +254,7 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Get names of all currently loaded collections.
-   *
-   * @returns Array of collection names currently loaded in memory.
-   * @throws {DatabaseError} When database is not open.
-   * @example
-   * ```typescript
-   * const collections = await db.listCollections();
-   * console.log('Collections:', collections);
-   * ```
-   * @since 1.0.0
+   * @returns Array of collection names currently loaded in memory
    */
   public async listCollections(): Promise<string[]> {
     if (!this.isOpen) {
@@ -305,33 +268,15 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Check if a collection is currently loaded in memory.
-   *
-   * @param name - Name of the collection to check.
-   * @returns True if collection exists in memory, false otherwise.
-   * @example
-   * ```typescript
-   * if (db.hasCollection('users')) {
-   *   const users = db.collection('users');
-   * }
-   * ```
-   * @since 1.0.0
+   * @param name - Name of the collection to check
+   * @returns True if collection exists in memory, false otherwise
    */
   public hasCollection(name: string): boolean {
     return this.collections.has(name);
   }
 
   /**
-   * Get aggregated statistics across all collections.
-   *
-   * @returns Database statistics including document counts, size, and uptime.
-   * @throws {DatabaseError} When database is not open.
-   * @example
-   * ```typescript
-   * const stats = await db.getStats();
-   * console.log(`Database has ${stats.totalDocuments} documents across ${stats.collections} collections`);
-   * ```
-   * @since 1.0.0
+   * @returns Database statistics including document counts, size, and uptime
    */
   public async getStats(): Promise<DatabaseStats> {
     if (!this.isOpen) {
@@ -362,58 +307,28 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Get a copy of current database configuration.
-   *
-   * @returns Copy of the database options used during initialization.
-   * @example
-   * ```typescript
-   * const options = db.getOptions();
-   * console.log('Database path:', options.path);
-   * ```
-   * @since 1.0.0
+   * @returns Copy of the database options used during initialization
    */
   public getOptions(): DatabaseOptions {
     return { ...this.options };
   }
 
   /**
-   * Check if database is currently open and ready for operations.
-   *
-   * @returns True if database is open and ready, false otherwise.
-   * @example
-   * ```typescript
-   * if (db.isDatabaseOpen()) {
-   *   // Safe to perform operations
-   * }
-   * ```
-   * @since 1.0.0
+   * @returns True if database is open and ready, false otherwise
    */
   public isDatabaseOpen(): boolean {
     return this.isOpen;
   }
 
   /**
-   * Get the storage path where database files are located.
-   *
-   * @returns Absolute or relative path to database storage directory.
-   * @example
-   * ```typescript
-   * console.log('Database stored at:', db.getPath());
-   * ```
-   * @since 1.0.0
+   * @returns Absolute or relative path to database storage directory
    */
   public getPath(): string {
     return this.options.path!;
   }
 
   /**
-   * Clear all collection caches to free memory.
-   *
-   * @example
-   * ```typescript
-   * db.clearCaches(); // Free up memory by clearing all caches
-   * ```
-   * @since 1.0.0
+   * Clear all collection caches to free memory
    */
   public clearCaches(): void {
     for (const collection of this.collections.values()) {
@@ -423,9 +338,7 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Create a backup of the database (placeholder implementation).
-   *
-   * @param backupPath - Destination for backup files.
+   * @param backupPath - Destination for backup files
    */
   public async backup(backupPath: string): Promise<void> {
     if (!this.isOpen) {
@@ -447,14 +360,7 @@ class NuboDB extends EventEmitter {
   }
 
   /**
-   * Perform database compaction to optimize storage (placeholder implementation).
-   *
-   * @throws {DatabaseError} When database is not open or compaction fails.
-   * @example
-   * ```typescript
-   * await db.compact(); // Optimize storage space
-   * ```
-   * @since 1.0.0
+   * Perform database compaction to optimize storage
    */
   public async compact(): Promise<void> {
     if (!this.isOpen) {
