@@ -2,20 +2,21 @@ import {
   createCipheriv,
   createDecipheriv,
   randomBytes,
-  pbkdf2Sync,
+  createHash,
 } from 'crypto';
 import { EncryptionError } from '../errors/DatabaseError';
 
 /**
- * Handles encryption and decryption of data using AES-256 with PBKDF2 key derivation
+ * Handles encryption and decryption of data using AES-256-CBC
+ * with SHA-256 key derivation (deterministic).
  */
 export class EncryptionManager {
   private key: Buffer;
   private algorithm: string;
 
   /**
-   * @param encryptionKey - Password/key for encryption
-   * @param algorithm - Encryption algorithm (default: aes-256-cbc)
+   * @param encryptionKey Password/key for encryption
+   * @param algorithm Encryption algorithm (default: aes-256-cbc)
    */
   constructor(encryptionKey: string, algorithm: string = 'aes-256-cbc') {
     this.algorithm = algorithm;
@@ -23,18 +24,18 @@ export class EncryptionManager {
   }
 
   /**
-   * @param password - Password to derive key from
-   * @param salt - Optional salt (generates random if not provided)
+   * Derives a consistent 32-byte key using SHA-256.
+   * @param password The encryption key (or password)
+   * @returns 32-byte key buffer
    */
-  private deriveKey(password: string, salt?: string): Buffer {
-    const saltBuffer = salt ? Buffer.from(salt, 'hex') : randomBytes(16);
-    const key = pbkdf2Sync(password, saltBuffer, 100000, 32, 'sha256');
-    return key;
+  private deriveKey(password: string): Buffer {
+    return createHash('sha256').update(password).digest();
   }
 
   /**
-   * @param data - String to encrypt
-   * @returns Encrypted data in format "iv:encrypted"
+   * Encrypts a string of data.
+   * @param data String to encrypt
+   * @returns Encrypted data in "iv:encrypted" format
    */
   encrypt(data: string): string {
     try {
@@ -53,18 +54,13 @@ export class EncryptionManager {
   }
 
   /**
-   * @param encryptedData - Encrypted data in "iv:encrypted" format
+   * Decrypts a string from "iv:encrypted" format.
+   * @param encryptedData Encrypted data string
    * @returns Decrypted string
    */
   decrypt(encryptedData: string): string {
     try {
-      const parts = encryptedData.split(':');
-      if (parts.length !== 2) {
-        throw new EncryptionError('Invalid encrypted data format');
-      }
-
-      const ivHex = parts[0];
-      const encrypted = parts[1];
+      const [ivHex, encrypted] = encryptedData.split(':');
 
       if (!ivHex || !encrypted) {
         throw new EncryptionError('Invalid encrypted data format');
@@ -85,7 +81,8 @@ export class EncryptionManager {
   }
 
   /**
-   * @param obj - Object to encrypt
+   * Encrypts a JS object (by JSON.stringify)
+   * @param obj Object to encrypt
    * @returns Encrypted JSON string
    */
   encryptObject(obj: any): string {
@@ -94,7 +91,8 @@ export class EncryptionManager {
   }
 
   /**
-   * @param encryptedData - Encrypted JSON string
+   * Decrypts encrypted JSON string to an object
+   * @param encryptedData Encrypted JSON string
    * @returns Decrypted object
    */
   decryptObject(encryptedData: string): any {

@@ -10,15 +10,11 @@ import { BaseCollection } from './BaseCollection';
 import { CollectionError } from '../errors/DatabaseError';
 import { QueryBuilder as QueryBuilderImpl } from './QueryBuilder';
 
-/**
- * @typeParam T - Document type for this collection
- */
+/** @typeParam T Document type for this collection */
 export class QueryOperations<T = Document> extends BaseCollection<T> {
-  /**
-   * @param filter - MongoDB-like query filter
-   * @param options - Query options (sort, limit, skip, projection)
-   * @returns Query result with documents and metadata
-   */
+  /** @param filter MongoDB-like query filter
+   * @param options Query options (sort, limit, skip, projection)
+   * @returns Query result with documents and metadata */
   async find(
     filter: QueryFilter = {},
     options: QueryOptions = {}
@@ -26,34 +22,56 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     await this.ensureInitialized();
 
     try {
-      let documents = await this.getAllDocuments();
-
-      if (this.indexes.size > 0) {
-        const indexedDocs = this.useIndexes(documents, filter);
-        if (indexedDocs.length < documents.length) {
-          documents = indexedDocs;
-        }
-      }
-
       const limit = options.limit || Number.MAX_SAFE_INTEGER;
       const skip = options.skip || 0;
+
+      if (
+        Object.keys(filter).length === 0 &&
+        limit !== Number.MAX_SAFE_INTEGER
+      ) {
+        const documents = await this.getAllDocuments();
+        const sliced = documents.slice(skip, skip + limit);
+
+        let result = sliced;
+        if (options.sort && result.length > 1) {
+          result = this.sortDocuments(result, options.sort);
+        }
+        if (options.projection) {
+          result = this.projectDocuments(result, options.projection);
+        }
+
+        return {
+          documents: result,
+          total: documents.length,
+          hasMore: documents.length > skip + result.length,
+        };
+      }
+
+      let documents: T[];
+      let useIndexOptimization = false;
+
+      if (this.indexes.size > 0) {
+        const allDocs = await this.getAllDocuments();
+        const indexedDocs = this.useIndexes(allDocs, filter);
+        if (indexedDocs.length < allDocs.length && indexedDocs.length > 0) {
+          documents = indexedDocs;
+          useIndexOptimization = true;
+        } else {
+          documents = allDocs;
+        }
+      } else {
+        documents = await this.getAllDocuments();
+      }
 
       let filteredDocuments = this.filterDocuments(
         documents,
         filter,
-        limit + skip
+        useIndexOptimization ? documents.length : limit + skip
       );
       const total = filteredDocuments.length;
 
       if (options.sort && filteredDocuments.length > 1) {
         filteredDocuments = this.sortDocuments(filteredDocuments, options.sort);
-      }
-
-      if (options.projection) {
-        filteredDocuments = this.projectDocuments(
-          filteredDocuments,
-          options.projection
-        );
       }
 
       if (skip > 0) {
@@ -62,6 +80,13 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
 
       if (limit < Number.MAX_SAFE_INTEGER) {
         filteredDocuments = filteredDocuments.slice(0, limit);
+      }
+
+      if (options.projection) {
+        filteredDocuments = this.projectDocuments(
+          filteredDocuments,
+          options.projection
+        );
       }
 
       return {
@@ -76,19 +101,15 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     }
   }
 
-  /**
-   * @param filter - Query filter to match documents
-   * @returns First matching document or null
-   */
+  /** @param filter Query filter to match documents
+   * @returns First matching document or null */
   async findOne(filter: QueryFilter = {}): Promise<T | null> {
     const result = await this.find(filter, { limit: 1 });
     return result.documents[0] || null;
   }
 
-  /**
-   * @param id - Document ID to lookup
-   * @returns Document or null if not found
-   */
+  /** @param id Document ID to lookup
+   * @returns Document or null if not found */
   async findById(id: string): Promise<T | null> {
     await this.ensureInitialized();
 
@@ -102,11 +123,13 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
         let decryptedDocument = document;
         if (this.encryptionManager && document.data) {
           decryptedDocument = this.encryptionManager.decryptObject(
-            document.data
+            document.data as string
           );
         }
 
-        this.cache.set(id, decryptedDocument as T);
+        if (this.cache.size < (this.options.maxCacheSize || 1000)) {
+          this.cache.set(id, decryptedDocument as T);
+        }
         return decryptedDocument as T;
       }
 
@@ -118,15 +141,13 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     }
   }
 
-  /** @returns QueryBuilder instance for this collection */
+  /** @returns QueryBuilder instance */
   query(): QueryBuilder<T> {
     return new QueryBuilderImpl<T>(this);
   }
 
-  /**
-   * @param filter - Query filter to match documents
-   * @returns Number of matching documents
-   */
+  /** @param filter Query filter to match documents
+   * @returns Number of matching documents */
   async count(filter: QueryFilter = {}): Promise<number> {
     const result = await this.find(filter);
     return result.total;
@@ -164,16 +185,24 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param document - Document to check
    * @param filterEntries - Query filter entries
    */
-  private matchesFilter(document: T, filterEntries: [string, any][]): boolean {
+  private matchesFilter(
+    document: T,
+    filterEntries: Array<[string, unknown]>
+  ): boolean {
     for (const [field, value] of filterEntries) {
       if (field.startsWith('$')) {
-        if (!this.matchesLogicalOperator(document, field, value as any[])) {
+        if (!this.matchesLogicalOperator(document, field, value as unknown[])) {
           return false;
         }
       } else {
-        const fieldValue = (document as any)[field];
+        const fieldValue = (document as Record<string, unknown>)[field];
         if (typeof value === 'object' && value !== null) {
-          if (!this.matchesComparisonOperators(fieldValue, value)) {
+          if (
+            !this.matchesComparisonOperators(
+              fieldValue,
+              value as Record<string, unknown>
+            )
+          ) {
             return false;
           }
         } else {
@@ -194,20 +223,29 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
   private matchesLogicalOperator(
     document: T,
     operator: string,
-    conditions: any[]
+    conditions: unknown[]
   ): boolean {
     switch (operator) {
       case '$and':
         return conditions.every(condition =>
-          this.matchesFilter(document, condition)
+          this.matchesFilter(
+            document,
+            Object.entries(condition as Record<string, unknown>)
+          )
         );
       case '$or':
         return conditions.some(condition =>
-          this.matchesFilter(document, condition)
+          this.matchesFilter(
+            document,
+            Object.entries(condition as Record<string, unknown>)
+          )
         );
       case '$nor':
         return !conditions.some(condition =>
-          this.matchesFilter(document, condition)
+          this.matchesFilter(
+            document,
+            Object.entries(condition as Record<string, unknown>)
+          )
         );
       default:
         return true;
@@ -218,7 +256,10 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
    * @param value - Document field value
    * @param operators - Comparison operators to apply
    */
-  private matchesComparisonOperators(value: any, operators: any): boolean {
+  private matchesComparisonOperators(
+    value: unknown,
+    operators: Record<string, unknown>
+  ): boolean {
     const operatorEntries = Object.entries(operators);
 
     for (const [operator, operatorValue] of operatorEntries) {
@@ -230,16 +271,36 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
           if (value === operatorValue) return false;
           break;
         case '$gt':
-          if (value <= (operatorValue as number)) return false;
+          if (
+            typeof value === 'number' &&
+            typeof operatorValue === 'number' &&
+            value <= operatorValue
+          )
+            return false;
           break;
         case '$gte':
-          if (value < (operatorValue as number)) return false;
+          if (
+            typeof value === 'number' &&
+            typeof operatorValue === 'number' &&
+            value < operatorValue
+          )
+            return false;
           break;
         case '$lt':
-          if (value >= (operatorValue as number)) return false;
+          if (
+            typeof value === 'number' &&
+            typeof operatorValue === 'number' &&
+            value >= operatorValue
+          )
+            return false;
           break;
         case '$lte':
-          if (value > (operatorValue as number)) return false;
+          if (
+            typeof value === 'number' &&
+            typeof operatorValue === 'number' &&
+            value > operatorValue
+          )
+            return false;
           break;
         case '$in':
           if (
@@ -282,20 +343,41 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     documents: T[],
     sort: { [field: string]: 1 | -1 } | Array<[string, 1 | -1]>
   ): T[] {
-    const sortArray = Array.isArray(sort) ? sort : Object.entries(sort);
+    if (documents.length <= 1) return documents;
 
+    const sortArray = Array.isArray(sort) ? sort : Object.entries(sort);
     const sortFields = sortArray.map(([field, direction]) => ({
       field,
       direction,
     }));
 
-    return documents.sort((a, b) => {
+    return documents.slice().sort((a, b) => {
       for (const { field, direction } of sortFields) {
-        const aVal = (a as any)[field];
-        const bVal = (b as any)[field];
+        const aVal = (a as Record<string, unknown>)[field];
+        const bVal = (b as Record<string, unknown>)[field];
 
-        if (aVal < bVal) return -1 * direction;
-        if (aVal > bVal) return 1 * direction;
+        if (aVal == null && bVal == null) continue;
+        if (aVal == null) return -1 * direction;
+        if (bVal == null) return 1 * direction;
+
+        const aType = typeof aVal;
+        const bType = typeof bVal;
+
+        if (aType === bType) {
+          if (aType === 'string') {
+            const result = (aVal as string).localeCompare(bVal as string);
+            if (result !== 0) return result * direction;
+          } else if (aType === 'number') {
+            const diff = (aVal as number) - (bVal as number);
+            if (diff !== 0) return diff * direction;
+          } else if (aVal instanceof Date && bVal instanceof Date) {
+            const diff = aVal.getTime() - bVal.getTime();
+            if (diff !== 0) return diff * direction;
+          } else {
+            if (aVal < bVal) return -1 * direction;
+            if (aVal > bVal) return 1 * direction;
+          }
+        }
       }
       return 0;
     });
@@ -319,19 +401,19 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
       .map(([field, _]) => field);
 
     return documents.map(document => {
-      const projected: any = {};
+      const projected: Record<string, unknown> = {};
 
       if (includeFields.length > 0) {
         for (const field of includeFields) {
           if (Object.prototype.hasOwnProperty.call(document, field)) {
-            projected[field] = (document as any)[field];
+            projected[field] = (document as Record<string, unknown>)[field];
           }
         }
       } else {
-        const docKeys = Object.keys(document as any);
+        const docKeys = Object.keys(document as Record<string, unknown>);
         for (const field of docKeys) {
           if (!excludeFields.includes(field)) {
-            projected[field] = (document as any)[field];
+            projected[field] = (document as Record<string, unknown>)[field];
           }
         }
       }

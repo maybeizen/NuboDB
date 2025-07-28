@@ -3,17 +3,13 @@ import { join } from 'path';
 import type { Document, DocumentMetadata } from '../core/types';
 import { StorageError } from '../errors/DatabaseError';
 
-/**
- * Collection-aware file storage engine
- */
+/** Collection-aware file storage engine */
 export class FileStorage {
   private basePath: string;
   private ensuredDirs: Set<string> = new Set();
   private readonly MAX_CONCURRENT_FILES = 100;
 
-  /**
-   * @param basePath - Root directory where all collections will be stored
-   */
+  /** @param basePath Root directory where all collections will be stored */
   constructor(basePath: string) {
     this.basePath = basePath;
   }
@@ -31,10 +27,8 @@ export class FileStorage {
     this.ensuredDirs.add(path);
   }
 
-  /**
-   * @param collectionPath - Collection folder relative to basePath
-   * @param document - Document with metadata to write
-   */
+  /** @param collectionPath Collection folder relative to basePath
+   * @param document Document with metadata to write */
   async writeDocument(
     collectionPath: string,
     document: Document
@@ -53,9 +47,7 @@ export class FileStorage {
     }
   }
 
-  /**
-   * @returns The document or null if the file doesn't exist
-   */
+  /** @returns The document or null if the file doesn't exist */
   async readDocument(
     collectionPath: string,
     documentId: string
@@ -84,9 +76,7 @@ export class FileStorage {
     }
   }
 
-  /**
-   * @returns An array of documents
-   */
+  /** @returns An array of documents */
   async readAllDocuments(collectionPath: string): Promise<Document[]> {
     const fullPath = join(this.basePath, collectionPath);
 
@@ -118,9 +108,7 @@ export class FileStorage {
     }
   }
 
-  /**
-   * @returns true if the document was deleted, false if it didn't exist
-   */
+  /** @returns true if the document was deleted, false if it didn't exist */
   async deleteDocument(
     collectionPath: string,
     documentId: string
@@ -144,9 +132,7 @@ export class FileStorage {
     }
   }
 
-  /**
-   * @returns true if the document exists, false if it doesn't
-   */
+  /** @returns true if the document exists, false if it doesn't */
   async documentExists(
     collectionPath: string,
     documentId: string

@@ -55,10 +55,8 @@ export {
 export { FileStorage } from './storage/FileStorage';
 export { EncryptionManager } from './encryption/EncryptionManager';
 
-/**
- * @param options - Database configuration options
- * @returns Promise resolving to a database instance
- */
+/** @param options Database configuration options
+ * @returns Promise resolving to a database instance */
 export async function createDatabase(
   options: DatabaseOptions
 ): Promise<NuboDB> {

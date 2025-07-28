@@ -1,10 +1,8 @@
 import type { Schema, Document } from '../core/types';
 import { SchemaError } from '../errors/DatabaseError';
 
-/**
- * @param data - Document data to validate
- * @param schema - Schema definition to validate against
- */
+/** @param data Document data to validate
+ * @param schema Schema definition to validate against */
 export function validateSchema(data: any, schema: Schema): void {
   for (const [fieldName, fieldSchema] of Object.entries(schema)) {
     const value = data[fieldName];
@@ -49,11 +47,9 @@ export function validateFieldType(value: any, expectedType: string): boolean {
   }
 }
 
-/**
- * @param data - Document data
- * @param schema - Schema with default values
- * @returns Data with defaults applied
- */
+/** @param data Document data
+ * @param schema Schema with default values
+ * @returns Data with defaults applied */
 export function applyDefaults(data: any, schema: Schema): any {
   const result = { ...data };
 
@@ -66,10 +62,8 @@ export function applyDefaults(data: any, schema: Schema): any {
   return result;
 }
 
-/**
- * @param data - Raw document data
- * @returns Sanitized document data
- */
+/** @param data Raw document data
+ * @returns Sanitized document data */
 export function sanitizeDocument(
   data: any
 ): Omit<Document, '_id' | '_createdAt' | '_updatedAt'> {

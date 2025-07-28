@@ -17,27 +17,26 @@ import {
 import { createDocumentMetadata, generateTimestamp } from '../utils/id';
 import { DocumentError } from '../errors/DatabaseError';
 import { QueryOperations } from './QueryOperations';
+import { CollectionOptions } from './types';
 
-/**
- * @typeParam T - Document type for this collection
- */
+/** @typeParam T Document type for this collection */
 export class DocumentOperations<T = Document> extends BaseCollection<T> {
   private queryOps: QueryOperations<T>;
 
-  /**
-   * @param name - Collection name
-   * @param storage - Storage engine instance
-   * @param options - Collection configuration
-   */
-  constructor(name: string, storage: any, options: any = {}) {
+  /** @param name Collection name
+   * @param storage Storage engine instance
+   * @param options Collection configuration */
+  constructor(
+    name: string,
+    storage: import('../storage/FileStorage').FileStorage,
+    options: CollectionOptions = {}
+  ) {
     super(name, storage, options);
     this.queryOps = new QueryOperations<T>(name, storage, options);
   }
 
-  /**
-   * @param data - Document data to insert
-   * @returns Insert result with generated ID and document
-   */
+  /** @param data Document data to insert
+   * @returns Insert result with generated ID and document */
   async insert(data: Partial<T>): Promise<InsertResult> {
     await this.ensureInitialized();
 
@@ -91,36 +90,43 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
     }
   }
 
-  /**
-   * @param documents - Array of documents to insert
-   * @returns Bulk insert result with IDs and count
-   */
+  /** @param documents Array of documents to insert
+   * @returns Bulk insert result with IDs and count */
   async insertMany(documents: Partial<T>[]): Promise<InsertManyResult> {
     await this.ensureInitialized();
+
+    if (documents.length === 0) {
+      return { insertedIds: [], insertedCount: 0, success: true };
+    }
 
     try {
       const insertedIds: string[] = [];
       const processedDocuments: (T & DocumentWithMetadata)[] = [];
 
-      for (const data of documents) {
-        let processedData = { ...data };
+      const batchSize = 100;
+      for (let i = 0; i < documents.length; i += batchSize) {
+        const batch = documents.slice(i, i + batchSize);
 
-        if (this.schema) {
-          validateSchema(processedData, this.schema);
-          processedData = applyDefaults(processedData, this.schema);
+        for (const data of batch) {
+          let processedData = { ...data };
+
+          if (this.schema) {
+            validateSchema(processedData, this.schema);
+            processedData = applyDefaults(processedData, this.schema);
+          }
+
+          const metadata = createDocumentMetadata();
+          const document = {
+            _id: metadata.id,
+            _createdAt: metadata.createdAt,
+            _updatedAt: metadata.updatedAt,
+            _version: 1,
+            ...sanitizeDocument(processedData),
+          } as T & DocumentWithMetadata;
+
+          insertedIds.push(document._id);
+          processedDocuments.push(document);
         }
-
-        const metadata = createDocumentMetadata();
-        const document = {
-          _id: metadata.id,
-          _createdAt: metadata.createdAt,
-          _updatedAt: metadata.updatedAt,
-          _version: 1,
-          ...sanitizeDocument(processedData),
-        } as T & DocumentWithMetadata;
-
-        insertedIds.push(document._id);
-        processedDocuments.push(document);
       }
 
       const writePromises = processedDocuments.map(async document => {
@@ -140,12 +146,20 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
 
       await Promise.all(writePromises);
 
+      const cacheUpdates: Array<Promise<void>> = [];
       processedDocuments.forEach(document => {
-        this.cache.set(document._id, document as T);
+        if (this.cache.size < (this.options.maxCacheSize || 1000)) {
+          this.cache.set(document._id, document as T);
+        }
+
         if (this.options.autoIndex) {
-          this.updateIndexes(document, 'insert');
+          cacheUpdates.push(this.updateIndexes(document, 'insert'));
         }
       });
+
+      if (cacheUpdates.length > 0) {
+        await Promise.all(cacheUpdates);
+      }
 
       return {
         insertedIds,
@@ -159,11 +173,9 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
     }
   }
 
-  /**
-   * @param filter - Query filter to match documents
-   * @param updateData - Fields to update in matching documents
-   * @returns Update result with modified count
-   */
+  /** @param filter Query filter to match documents
+   * @param updateData Fields to update in matching documents
+   * @returns Update result with modified count */
   async update(
     filter: QueryFilter,
     updateData: Partial<T>
@@ -172,7 +184,14 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
 
     try {
       const documents = await this.queryOps.find(filter);
+
+      if (documents.documents.length === 0) {
+        return { modifiedCount: 0, success: true };
+      }
+
       let modifiedCount = 0;
+      const updatePromises: Promise<void>[] = [];
+      const indexUpdatePromises: Promise<void>[] = [];
 
       for (const document of documents.documents) {
         const docWithMetadata = document as T & DocumentWithMetadata;
@@ -196,15 +215,25 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
           } as unknown as T & DocumentWithMetadata;
         }
 
-        await this.storage.writeDocument(this.name, documentToStore);
+        updatePromises.push(
+          this.storage.writeDocument(this.name, documentToStore)
+        );
 
         this.cache.set(updatedDocument._id, updatedDocument as T);
 
         if (this.options.autoIndex) {
-          await this.updateIndexes(updatedDocument, 'update');
+          indexUpdatePromises.push(
+            this.updateIndexes(updatedDocument, 'update')
+          );
         }
 
         modifiedCount++;
+      }
+
+      await Promise.all(updatePromises);
+
+      if (indexUpdatePromises.length > 0) {
+        await Promise.all(indexUpdatePromises);
       }
 
       return {
@@ -218,11 +247,9 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
     }
   }
 
-  /**
-   * @param filter - Query filter to match documents
-   * @param updateData - Data to update or insert
-   * @returns Update result with upsert information
-   */
+  /** @param filter Query filter to match documents
+   * @param updateData Data to update or insert
+   * @returns Update result with upsert information */
   async upsert(
     filter: QueryFilter,
     updateData: Partial<T>
@@ -242,10 +269,8 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
     }
   }
 
-  /**
-   * @param filter - Query filter to match documents for deletion
-   * @returns Delete result with deleted count
-   */
+  /** @param filter Query filter to match documents for deletion
+   * @returns Delete result with deleted count */
   async delete(filter: QueryFilter): Promise<DeleteResult> {
     await this.ensureInitialized();
 
@@ -282,10 +307,8 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
     }
   }
 
-  /**
-   * @param filter - Query filter to match document for deletion
-   * @returns Delete result with deleted count (0 or 1)
-   */
+  /** @param filter Query filter to match document for deletion
+   * @returns Delete result with deleted count (0 or 1) */
   async deleteOne(filter: QueryFilter): Promise<DeleteResult> {
     const document = await this.queryOps.findOne(filter);
     if (!document) {
@@ -296,15 +319,13 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
     return this.delete({ _id: docWithMetadata._id });
   }
 
-  /**
-   * @param definition - Index definition with fields and options
-   */
+  /** @param definition Index definition with fields and options */
   async createIndex(definition: IndexDefinition): Promise<void> {
     await this.ensureInitialized();
 
     const indexName =
       definition.name || Object.keys(definition.fields).join('_');
-    const indexMap = new Map<any, string[]>();
+    const indexMap = new Map<unknown, string[]>();
 
     const documents = await this.getAllDocuments();
 

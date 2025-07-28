@@ -27,15 +27,15 @@ export interface SchemaField {
     | 'date'
     | 'buffer';
   required?: boolean;
-  default?: any;
+  default?: unknown;
   unique?: boolean;
   index?: boolean;
   min?: number;
   max?: number;
   pattern?: RegExp;
-  enum?: any[];
+  enum?: unknown[];
   ref?: string;
-  validate?: (value: any) => boolean | string;
+  validate?: (value: unknown) => boolean | string;
 }
 
 export interface Schema {
@@ -47,7 +47,7 @@ export interface Document {
   _createdAt: Date;
   _updatedAt: Date;
   _version?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface DocumentMetadata {
@@ -77,11 +77,11 @@ export type QueryOperator =
   | '$not';
 
 export interface QueryCondition {
-  [operator: string]: any;
+  [operator: string]: unknown;
 }
 
 export interface QueryFilter {
-  [field: string]: any | QueryCondition;
+  [field: string]: unknown | QueryCondition;
 }
 
 export interface QueryOptions {
@@ -145,9 +145,9 @@ export interface FindResult<T = Document> {
 }
 
 export interface QueryBuilder<T = Document> {
-  where(field: string, operator: QueryOperator, value: any): QueryBuilder<T>;
-  and(field: string, operator: QueryOperator, value: any): QueryBuilder<T>;
-  or(field: string, operator: QueryOperator, value: any): QueryBuilder<T>;
+  where(field: string, operator: QueryOperator, value: unknown): QueryBuilder<T>;
+  and(field: string, operator: QueryOperator, value: unknown): QueryBuilder<T>;
+  or(field: string, operator: QueryOperator, value: unknown): QueryBuilder<T>;
   sort(field: string, direction: 1 | -1): QueryBuilder<T>;
   limit(count: number): QueryBuilder<T>;
   skip(count: number): QueryBuilder<T>;
@@ -157,10 +157,32 @@ export interface QueryBuilder<T = Document> {
   count(): Promise<number>;
 }
 
+export interface CollectionInterface<T = Document> {
+  insertOne(document: Omit<T, '_id' | '_createdAt' | '_updatedAt'>): Promise<InsertResult>;
+  insertMany(documents: Array<Omit<T, '_id' | '_createdAt' | '_updatedAt'>>): Promise<InsertManyResult>;
+  findOne(filter?: QueryFilter): Promise<T | null>;
+  find(filter?: QueryFilter, options?: QueryOptions): Promise<FindResult<T>>;
+  updateOne(filter: QueryFilter, update: Partial<T>): Promise<UpdateResult>;
+  updateMany(filter: QueryFilter, update: Partial<T>): Promise<UpdateResult>;
+  deleteOne(filter: QueryFilter): Promise<DeleteResult>;
+  deleteMany(filter: QueryFilter): Promise<DeleteResult>;
+  count(filter?: QueryFilter): Promise<number>;
+  createIndex(definition: IndexDefinition): Promise<void>;
+  dropIndex(name: string): Promise<void>;
+  stats(): Promise<CollectionStats>;
+}
+
+export interface CollectionStats {
+  documents: number;
+  size: number;
+  indexes: IndexDefinition[];
+  averageDocumentSize: number;
+}
+
 export interface Transaction {
   commit(): Promise<void>;
   rollback(): Promise<void>;
-  collection(name: string): any;
+  collection<T = Document>(name: string): CollectionInterface<T>;
 }
 
 export interface DatabaseStats {

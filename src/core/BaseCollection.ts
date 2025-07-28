@@ -3,9 +3,7 @@ import type { FileStorage } from '../storage/FileStorage';
 import { EncryptionManager } from '../encryption/EncryptionManager';
 import { CollectionError } from '../errors/DatabaseError';
 
-/**
- * Document with system metadata
- */
+/** Document with system metadata */
 export type DocumentWithMetadata = Document & {
   _id: string;
   _createdAt: Date;
@@ -13,9 +11,7 @@ export type DocumentWithMetadata = Document & {
   _version?: number;
 };
 
-/**
- * @typeParam T - Document type for this collection
- */
+/** @typeParam T Document type for this collection */
 export abstract class BaseCollection<T = Document> {
   protected name: string;
   protected storage: FileStorage;
@@ -27,11 +23,9 @@ export abstract class BaseCollection<T = Document> {
   protected isInitialized: boolean = false;
   protected documentCount: number = 0;
 
-  /**
-   * @param name - Collection name
-   * @param storage - Storage engine instance
-   * @param options - Collection configuration
-   */
+  /** @param name Collection name
+   * @param storage Storage engine instance
+   * @param options Collection configuration */
   constructor(
     name: string,
     storage: FileStorage,
@@ -54,9 +48,7 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
-  /**
-   * Load documents from storage, build indexes, and populate cache
-   */
+  /** Load documents from storage, build indexes, and populate cache */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
@@ -102,21 +94,25 @@ export abstract class BaseCollection<T = Document> {
 
     try {
       const documents = await this.storage.readAllDocuments(this.name);
+
+      if (documents.length === 0) {
+        this.documentCount = 0;
+        return [];
+      }
+
       const decryptedDocuments: T[] = [];
+      const maxCacheSize = this.options.maxCacheSize || 1000;
 
-      const batchSize = 1000;
-      for (let i = 0; i < documents.length; i += batchSize) {
-        const batch = documents.slice(i, i + batchSize);
+      for (const document of documents) {
+        let decryptedDocument = document;
+        if (this.encryptionManager && document.data) {
+          decryptedDocument = this.encryptionManager.decryptObject(
+            document.data as string
+          );
+        }
+        decryptedDocuments.push(decryptedDocument as T);
 
-        for (const document of batch) {
-          let decryptedDocument = document;
-          if (this.encryptionManager && document.data) {
-            decryptedDocument = this.encryptionManager.decryptObject(
-              document.data
-            );
-          }
-          decryptedDocuments.push(decryptedDocument as T);
-
+        if (this.cache.size < maxCacheSize) {
           this.cache.set(document._id, decryptedDocument as T);
         }
       }
@@ -130,9 +126,7 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
-  /**
-   * @param documents - Documents to index
-   */
+  /** @param documents Documents to index */
   protected async buildIndexes(documents: T[]): Promise<void> {
     if (!this.schema) return;
 
@@ -154,10 +148,8 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
-  /**
-   * @param document - Document being modified
-   * @param operation - Type of operation (insert/update/delete)
-   */
+  /** @param document Document being modified
+   * @param operation Type of operation (insert/update/delete) */
   protected async updateIndexes(
     document: T & DocumentWithMetadata,
     operation: 'insert' | 'update' | 'delete'
@@ -190,22 +182,20 @@ export abstract class BaseCollection<T = Document> {
     }
   }
 
-  /**
-   * @param document - Document to extract key from
-   * @param fields - Fields to include in index key
-   */
+  /** @param document Document to extract key from
+   * @param fields Fields to include in index key */
   protected extractIndexKey(
     document: T & DocumentWithMetadata,
     fields: { [field: string]: 1 | -1 }
-  ): any {
+  ): unknown | unknown[] {
     const keys = Object.keys(fields);
     if (keys.length === 1) {
       const key = keys[0];
       if (key) {
-        return (document as any)[key];
+        return (document as Record<string, unknown>)[key];
       }
     }
-    return keys.map(key => (document as any)[key]);
+    return keys.map(key => (document as Record<string, unknown>)[key]);
   }
 
   /** Clear the document cache to free memory */
@@ -213,9 +203,7 @@ export abstract class BaseCollection<T = Document> {
     this.cache.clear();
   }
 
-  /**
-   * @returns Object with document count, size, index count, and cache size
-   */
+  /** @returns Object with document count, size, index count, and cache size */
   async stats(): Promise<{
     totalDocuments: number;
     totalSize: number;

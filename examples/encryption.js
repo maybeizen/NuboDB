@@ -9,7 +9,7 @@ async function encryptionExample() {
       path: './examples/encrypted-db',
       debug: true,
       encrypt: true,
-      encryptionKey: 'my-super-secret-key-123',
+      encryptionKey: 'super-secret-key',
       encryptionMethod: 'aes-256-cbc',
     });
 
