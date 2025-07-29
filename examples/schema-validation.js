@@ -1,4 +1,4 @@
-import { createDatabase } from '../dist/index.js';
+import { createDatabase, createField, validators } from '../dist/index.js';
 
 async function schemaValidationExample() {
   console.log('=== NuboDB Schema Validation Example ===\n');
@@ -13,28 +13,23 @@ async function schemaValidationExample() {
     await db.open();
     console.log('✅ Database opened');
 
-    // Define a comprehensive schema
+      // Define a comprehensive schema using the new field creators and validators
     const userSchema = {
-      name: {
-        type: 'string',
+      // Using createField helpers for common types
+      name: createField.string({
         required: true,
-        min: 2,
-        max: 50,
-      },
-      email: {
-        type: 'string',
-        required: true,
-        unique: true,
-        index: true,
-        pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-      },
-      age: {
-        type: 'number',
+        minLength: 2,
+        maxLength: 50,
+      }),
+      email: createField.email(true), // Required email with built-in validation
+      age: createField.number({
         required: true,
         min: 0,
         max: 150,
         default: 18,
-      },
+      }),
+      
+      // Traditional field definitions with enhanced validators
       isActive: {
         type: 'boolean',
         default: true,
@@ -52,11 +47,22 @@ async function schemaValidationExample() {
         min: 0,
         max: 100,
         default: 0,
+        validate: validators.range(0, 100), // Using built-in range validator
       },
       category: {
         type: 'string',
         enum: ['admin', 'user', 'moderator'],
         default: 'user',
+      },
+      
+      // NEW: Additional fields showcasing enhanced validation
+      website: createField.url(false, 'https://example.com'), // Optional URL with default
+      phone: createField.phone(false), // Optional phone number
+      userId: createField.uuid(false), // Optional UUID field
+      password: {
+        type: 'string',
+        required: false,
+        validate: validators.minLength(8), // Minimum 8 characters
       },
     };
 
@@ -67,12 +73,12 @@ async function schemaValidationExample() {
 
     console.log('✅ Collection created with schema\n');
 
-    // Example 1: Valid document insertion
+    // Example 1: Valid document insertion with enhanced fields
     console.log('1. Inserting valid document:');
     try {
       const validUser = await users.insert({
         name: 'John Doe',
-        email: 'john@example.com',
+        email: 'john@example.com', // Uses built-in email validation
         age: 30,
         tags: ['developer', 'typescript'],
         profile: {
@@ -81,8 +87,11 @@ async function schemaValidationExample() {
         },
         score: 85,
         category: 'user',
+        website: 'https://johndoe.dev', // Valid URL
+        phone: '+1-555-123-4567', // Valid phone number
+        password: 'securepassword123', // Meets minimum length requirement
       });
-      console.log('   ✅ Valid user inserted with ID:', validUser.insertedId);
+      console.log('   ✅ Valid user inserted with ID:', validUser.id);
     } catch (error) {
       console.log('   ❌ Validation error:', error.message);
     }
@@ -150,7 +159,7 @@ async function schemaValidationExample() {
       });
       console.log(
         '   ✅ User with defaults inserted with ID:',
-        defaultUser.insertedId
+        defaultUser.id
       );
     } catch (error) {
       console.log('   ❌ Validation error:', error.message);
@@ -212,6 +221,59 @@ async function schemaValidationExample() {
       console.log('   ✅ Document inserted with warning (warn mode)');
     } catch (error) {
       console.log('   ❌ Error:', error.message);
+    }
+
+    // Example 11: Testing enhanced field validators
+    console.log('\n11. Testing enhanced field validators:');
+    
+    try {
+      await users.insert({
+        name: 'Validator Test',
+        email: 'test@validation.com',
+        age: 25,
+        website: 'invalid-url', // Should fail URL validation
+      });
+    } catch (error) {
+      console.log('   ❌ URL validation error:', error.message);
+    }
+    
+    try {
+      await users.insert({
+        name: 'Phone Test',
+        email: 'phone@test.com',
+        age: 25,
+        phone: 'invalid-phone', // Should fail phone validation
+      });
+    } catch (error) {
+      console.log('   ❌ Phone validation error:', error.message);
+    }
+    
+    try {
+      await users.insert({
+        name: 'Password Test',
+        email: 'pwd@test.com',
+        age: 25,
+        password: 'short', // Should fail minimum length validation
+      });
+    } catch (error) {
+      console.log('   ❌ Password validation error:', error.message);
+    }
+    
+    // Example 12: Successfully using enhanced validators
+    console.log('\n12. Valid enhanced field data:');
+    try {
+      const enhancedUser = await users.insert({
+        name: 'Enhanced User',
+        email: 'enhanced@example.com',
+        age: 28,
+        website: 'https://enhanced-user.com',
+        phone: '+1-555-987-6543',
+        password: 'strongpassword123',
+        score: 95, // Uses range validator
+      });
+      console.log('   ✅ Enhanced user inserted with ID:', enhancedUser.id);
+    } catch (error) {
+      console.log('   ❌ Validation error:', error.message);
     }
 
     await db.close();

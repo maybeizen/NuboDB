@@ -50,6 +50,8 @@ export {
   validateSchema,
   applyDefaults,
   sanitizeDocument,
+  validators,
+  createField,
 } from './utils/schema';
 
 export { FileStorage } from './storage/FileStorage';

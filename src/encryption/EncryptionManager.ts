@@ -13,6 +13,9 @@ import { EncryptionError } from '../errors/DatabaseError';
 export class EncryptionManager {
   private key: Buffer;
   private algorithm: string;
+  private readonly IV_LENGTH = 16;
+  private readonly HEX_ENCODING = 'hex' as const;
+  private readonly UTF8_ENCODING = 'utf8' as const;
 
   /**
    * @param encryptionKey Password/key for encryption
@@ -39,13 +42,18 @@ export class EncryptionManager {
    */
   encrypt(data: string): string {
     try {
-      const iv = randomBytes(16);
+      const iv = randomBytes(this.IV_LENGTH);
       const cipher = createCipheriv(this.algorithm, this.key, iv);
 
-      let encrypted = cipher.update(data, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
+      const encrypted1 = cipher.update(data, this.UTF8_ENCODING);
+      const encrypted2 = cipher.final();
+      const encryptedBuffer = Buffer.concat([encrypted1, encrypted2]);
 
-      return iv.toString('hex') + ':' + encrypted;
+      return (
+        iv.toString(this.HEX_ENCODING) +
+        ':' +
+        encryptedBuffer.toString(this.HEX_ENCODING)
+      );
     } catch (error) {
       throw new EncryptionError(
         `Encryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -60,19 +68,27 @@ export class EncryptionManager {
    */
   decrypt(encryptedData: string): string {
     try {
-      const [ivHex, encrypted] = encryptedData.split(':');
+      const colonIndex = encryptedData.indexOf(':');
+      if (colonIndex === -1) {
+        throw new EncryptionError('Invalid encrypted data format');
+      }
+
+      const ivHex = encryptedData.slice(0, colonIndex);
+      const encrypted = encryptedData.slice(colonIndex + 1);
 
       if (!ivHex || !encrypted) {
         throw new EncryptionError('Invalid encrypted data format');
       }
 
-      const iv = Buffer.from(ivHex, 'hex');
+      const iv = Buffer.from(ivHex, this.HEX_ENCODING);
+      const encryptedBuffer = Buffer.from(encrypted, this.HEX_ENCODING);
       const decipher = createDecipheriv(this.algorithm, this.key, iv);
 
-      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
+      const decrypted1 = decipher.update(encryptedBuffer);
+      const decrypted2 = decipher.final();
+      const decryptedBuffer = Buffer.concat([decrypted1, decrypted2]);
 
-      return decrypted;
+      return decryptedBuffer.toString(this.UTF8_ENCODING);
     } catch (error) {
       throw new EncryptionError(
         `Decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -86,6 +102,9 @@ export class EncryptionManager {
    * @returns Encrypted JSON string
    */
   encryptObject(obj: any): string {
+    if (typeof obj === 'string') {
+      return this.encrypt(obj);
+    }
     const jsonString = JSON.stringify(obj);
     return this.encrypt(jsonString);
   }
@@ -97,6 +116,34 @@ export class EncryptionManager {
    */
   decryptObject(encryptedData: string): any {
     const decryptedString = this.decrypt(encryptedData);
-    return JSON.parse(decryptedString);
+    try {
+      return JSON.parse(decryptedString);
+    } catch (error) {
+      return decryptedString;
+    }
+  }
+
+  /** @param objects Array of objects to encrypt
+   * @returns Array of encrypted objects */
+  encryptObjectsBatch(objects: any[]): string[] {
+    if (objects.length === 0) return [];
+
+    const results: string[] = [];
+    for (const obj of objects) {
+      results.push(this.encryptObject(obj));
+    }
+    return results;
+  }
+
+  /** @param encryptedObjects Array of encrypted objects
+   * @returns Array of decrypted objects */
+  decryptObjectsBatch(encryptedObjects: string[]): any[] {
+    if (encryptedObjects.length === 0) return [];
+
+    const results: any[] = [];
+    for (const encryptedObj of encryptedObjects) {
+      results.push(this.decryptObject(encryptedObj));
+    }
+    return results;
   }
 }

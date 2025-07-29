@@ -35,7 +35,7 @@ async function encryptionExample() {
 
     console.log(
       '   ✅ Sensitive user inserted with ID:',
-      sensitiveUser.insertedId
+      sensitiveUser.id
     );
 
     // Example 2: Insert more sensitive data

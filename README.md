@@ -13,6 +13,10 @@ A modern, fast, and feature-rich NoSQL database for Node.js with TypeScript supp
 - **🛡️ Type Safety** - Full TypeScript support with type definitions
 - **🔄 Event System** - Listen to database events
 - **📦 Zero Dependencies** - Lightweight and self-contained
+- **🔖 Collection Aliases** - Create shortcuts and alternate names for collections
+- **✅ Database Validation** - Built-in health checks and integrity validation
+- **🚀 Query Caching** - Automatic query result caching for improved performance
+- **🔧 Field Validators** - Pre-built validators for common field types (email, URL, etc.)
 
 ## Installation
 
@@ -43,7 +47,7 @@ const result = await users.insert({
   age: 30,
 });
 
-console.log('Inserted with ID:', result.insertedId);
+console.log('Inserted with ID:', result.id);
 
 // Find documents
 const allUsers = await users.find();
@@ -60,12 +64,23 @@ await db.close();
 
 Check out the comprehensive examples in the `/examples` folder:
 
+### Core Features
 - **[Basic Usage](./examples/basic-usage.js)** - Fundamental operations
 - **[Query Builder](./examples/query-builder.js)** - Advanced querying
 - **[Schema Validation](./examples/schema-validation.js)** - Data validation
 - **[Modular Architecture](./examples/modular-architecture.js)** - Custom collections
 - **[Encryption](./examples/encryption.js)** - Data encryption
 - **[Performance](./examples/performance.js)** - Optimization features
+
+### New Features (v1.3+)
+- **[Collection Aliases](./examples/collection-aliases.js)** - Flexible collection naming and shortcuts
+- **[Database Health](./examples/database-health.js)** - Health monitoring and validation
+- **[Query Caching](./examples/query-caching.js)** - Automatic query result caching
+- **[Field Validation](./examples/field-validation.js)** - Enhanced field validators and createField helpers
+- **[Comprehensive Features](./examples/comprehensive-features.js)** - All new features working together
+
+### Performance & Benchmarks
+- **[Performance Benchmark](./examples/performance-benchmark.js)** - Detailed performance testing
 
 Run any example:
 
@@ -90,12 +105,10 @@ const options: DatabaseOptions = {
   encrypt: true, // Enable data encryption (default: false)
   encryptionKey: 'your-secret-key', // Required if encrypt is true
   encryptionMethod: 'aes-256-cbc', // Algorithm (default: 'aes-256-cbc')
-  encryptionKDF: 'pbkdf2', // Key derivation function (default: 'pbkdf2')
 
   // Performance Optimization
   cacheDocuments: true, // Enable document caching (default: true)
   maxCacheSize: 1000, // Max documents in cache (default: 1000)
-  enableIndexing: true, // Auto-create indexes (default: true)
   autoFlush: true, // Auto-save changes (default: true)
   flushInterval: 1000, // Auto-save interval ms (default: 1000)
 
@@ -186,6 +199,81 @@ interface User {
 }
 
 const typedUsers = db.collection<User>('users');
+```
+
+### Enhanced Field Validation
+
+NuboDB now includes built-in validators and field creators for common data types:
+
+```typescript
+import { createField, validators } from 'nubodb';
+
+// Using pre-built field creators
+const userSchema = {
+  email: createField.email(true), // Required email field
+  website: createField.url(false, 'https://example.com'), // Optional URL with default
+  phone: createField.phone(true), // Required phone number
+  userId: createField.uuid(true), // Required UUID field
+
+  // String fields with constraints
+  username: createField.string({
+    required: true,
+    minLength: 3,
+    maxLength: 20,
+    pattern: /^[a-zA-Z0-9_]+$/,
+  }),
+
+  // Number fields with constraints
+  age: createField.number({
+    required: true,
+    min: 0,
+    max: 120,
+    positive: true,
+  }),
+
+  // Using individual validators
+  companyEmail: {
+    type: 'string',
+    required: true,
+    validate: validators.email,
+  },
+
+  password: {
+    type: 'string',
+    required: true,
+    validate: validators.minLength(8),
+  },
+
+  score: {
+    type: 'number',
+    validate: validators.range(0, 100),
+  },
+};
+
+const users = await db.createCollection('users', userSchema);
+```
+
+#### Available Validators
+
+```typescript
+// Built-in validators
+validators.email(value)           // Email format validation
+validators.url(value)             // URL format validation
+validators.phone(value)           // Phone number validation
+validators.uuid(value)            // UUID format validation
+validators.positive(value)        // Positive numbers only
+validators.nonNegative(value)     // Non-negative numbers
+validators.minLength(min)(value)  // Minimum string length
+validators.maxLength(max)(value)  // Maximum string length
+validators.range(min, max)(value) // Number range validation
+
+// Field creators with validation
+createField.email(required?, defaultValue?)
+createField.url(required?, defaultValue?)
+createField.phone(required?, defaultValue?)
+createField.uuid(required?, defaultValue?)
+createField.string(options)  // { required?, minLength?, maxLength?, pattern?, default? }
+createField.number(options)  // { required?, min?, max?, positive?, default? }
 ```
 
 ## Querying
@@ -303,8 +391,7 @@ const secureDb = await createDatabase({
   path: './encrypted-db',
   encrypt: true,
   encryptionKey: 'your-strong-secret-key-here',
-  encryptionMethod: 'aes-256-cbc', // or 'aes-256-gcm', 'chacha20-poly1305'
-  encryptionKDF: 'pbkdf2', // or 'scrypt', 'argon2'
+  encryptionMethod: 'aes-256-cbc', // Only aes-256-cbc is currently implemented
 });
 
 await secureDb.open();
@@ -336,8 +423,7 @@ console.log('Retrieved data:', user); // Decrypted automatically
 - Use a strong, unique encryption key (32+ characters)
 - Store the encryption key securely (environment variables, key management service)
 - Consider key rotation for production applications
-- AES-256-GCM provides both confidentiality and integrity
-- Argon2 KDF offers the strongest key derivation
+- Keys are derived using SHA-256 hashing
 
 ```typescript
 // Production encryption setup
@@ -345,8 +431,7 @@ const db = await createDatabase({
   path: process.env.DB_PATH,
   encrypt: true,
   encryptionKey: process.env.DB_ENCRYPTION_KEY, // From secure environment
-  encryptionMethod: 'aes-256-gcm', // Best for new applications
-  encryptionKDF: 'argon2', // Strongest KDF
+  encryptionMethod: 'aes-256-cbc', // Currently supported method
 });
 ```
 
@@ -373,32 +458,6 @@ db.on('error', error => {
   // Implement error handling, alerting, etc.
 });
 
-// Document operation events (if implemented)
-// Note: These events may not be available in the current version
-// but represent the intended event system design
-
-/*
-db.on('document:inserted', (collectionName, document) => {
-  console.log(`Document inserted in ${collectionName}:`, document._id);
-  // Trigger webhooks, update search indexes, etc.
-});
-
-db.on('document:updated', (collectionName, document) => {
-  console.log(`Document updated in ${collectionName}:`, document._id);
-  // Cache invalidation, audit logging, etc.
-});
-
-db.on('document:deleted', (collectionName, documentId) => {
-  console.log(`Document deleted in ${collectionName}:`, documentId);
-  // Cleanup related data, update counters, etc.
-});
-
-db.on('query:executed', (collectionName, filter, results) => {
-  console.log(`Query on ${collectionName} returned ${results.length} results`);
-  // Performance monitoring, query optimization analysis
-});
-*/
-
 // Remove event listeners
 const errorHandler = error => console.error(error);
 db.on('error', errorHandler);
@@ -410,6 +469,176 @@ db.off('error', errorHandler);
 db.once('collection:created', name => {
   console.log(`First collection created: ${name}`);
 });
+```
+
+## Collection Aliases
+
+Create shortcuts and alternate names for collections to improve code readability and maintain backward compatibility:
+
+```typescript
+// Create aliases for collections
+db.createAlias('users', 'user_accounts');
+db.createAlias('posts', 'blog_posts');
+db.createAlias('products', 'inventory_items');
+
+// Use aliases just like regular collection names
+const users = db.collection('users'); // Same as db.collection('user_accounts')
+const posts = db.collection('posts'); // Same as db.collection('blog_posts')
+
+// Insert data using alias
+await users.insert({
+  name: 'John Doe',
+  email: 'john@example.com',
+});
+
+// Query using alias
+const allUsers = await users.find();
+const userCount = await posts.count();
+
+// Check if a name is an alias
+if (db.isAlias('users')) {
+  console.log('users is an alias for:', db.getAliases()['users']);
+}
+
+// Get all aliases
+const aliases = db.getAliases();
+console.log('All aliases:', aliases);
+// Output: { users: 'user_accounts', posts: 'blog_posts', products: 'inventory_items' }
+
+// Remove an alias
+const removed = db.removeAlias('users');
+if (removed) {
+  console.log('Alias removed successfully');
+}
+
+// Practical use cases
+// 1. Backward compatibility
+db.createAlias('oldCollectionName', 'newCollectionName');
+
+// 2. Shorter names for frequently used collections
+db.createAlias('u', 'users');
+db.createAlias('p', 'products');
+
+// 3. Environment-specific collections
+if (process.env.NODE_ENV === 'test') {
+  db.createAlias('users', 'test_users');
+  db.createAlias('products', 'test_products');
+}
+```
+
+## Database Health & Validation
+
+Monitor database integrity and perform health checks:
+
+```typescript
+// Validate database integrity
+const health = await db.validate();
+
+if (health.isValid) {
+  console.log('Database is healthy ✅');
+} else {
+  console.log('Database issues found ⚠️');
+  console.log('Issues:', health.issues);
+
+  // Check specific collection issues
+  for (const [collectionName, stats] of Object.entries(health.collections)) {
+    if (stats.issues.length > 0) {
+      console.log(`Collection '${collectionName}' issues:`, stats.issues);
+      console.log(`Documents: ${stats.documents}`);
+    }
+  }
+}
+
+// Check if database path is accessible
+const isAccessible = await db.isAccessible();
+if (!isAccessible) {
+  console.error('Database path is not accessible');
+}
+
+// Example health check output
+/*
+{
+  isValid: false,
+  issues: [
+    "Collection 'users': Cache-storage mismatch detected"
+  ],
+  collections: {
+    users: {
+      documents: 150,
+      issues: ['Cache-storage mismatch detected']
+    },
+    products: {
+      documents: 500,
+      issues: []
+    }
+  }
+}
+*/
+
+// Use in application monitoring
+setInterval(async () => {
+  const health = await db.validate();
+  if (!health.isValid) {
+    // Send alert, log error, etc.
+    console.error('Database health check failed:', health.issues);
+  }
+}, 60000); // Check every minute
+```
+
+## Query Caching
+
+NuboDB automatically caches query results for improved performance:
+
+```typescript
+// Query caching is automatic and transparent
+const users = db.collection('users');
+
+// First query - cache miss, executes full query
+const result1 = await users.find({ status: 'active' });
+console.log('First query took:', Date.now() - start1, 'ms');
+
+// Second identical query - cache hit, returns instantly
+const start2 = Date.now();
+const result2 = await users.find({ status: 'active' });
+console.log('Cached query took:', Date.now() - start2, 'ms'); // Much faster!
+
+// Cache TTL is 5 seconds by default
+// After 5 seconds, the query will be re-executed and cached again
+
+// Manual cache management
+db.clearCaches(); // Clear all caches (document + query)
+
+// Cache works with all query options
+const cachedPaginated = await users.find(
+  { age: { $gte: 18 } },
+  { limit: 10, sort: { name: 1 } }
+);
+
+// Different queries have separate cache entries
+const adults = await users.find({ age: { $gte: 18 } }); // Cached separately
+const seniors = await users.find({ age: { $gte: 65 } }); // Cached separately
+
+// Query builder results are also cached
+const builderResult = await users
+  .query()
+  .where('status', '$eq', 'active')
+  .limit(10)
+  .execute(); // This result is cached too
+
+// Cache is automatically invalidated when documents are modified
+await users.insert({ name: 'New User', status: 'active' });
+// Next query for active users will be a cache miss (as expected)
+
+// Performance monitoring
+const collection = db.collection('products');
+
+console.time('first-query');
+await collection.find({ category: 'electronics' });
+console.timeEnd('first-query'); // ~50ms
+
+console.time('cached-query');
+await collection.find({ category: 'electronics' });
+console.timeEnd('cached-query'); // ~0.1ms (500x faster!)
 ```
 
 ## Contributing
@@ -441,17 +670,28 @@ await db.close()                   // Close and cleanup
 db.isDatabaseOpen()                 // Check if open
 
 // Collection management
-db.collection<T>(name, options?)   // Get/create collection
+db.collection<T>(name, options?)   // Get/create collection (supports aliases)
 await db.createCollection<T>(name, schema?, options?) // Explicitly create
 await db.dropCollection(name)      // Delete collection
 await db.listCollections()         // List all collections
 db.hasCollection(name)              // Check if exists
+
+// Collection aliases (NEW!)
+db.createAlias(alias, collectionName)  // Create collection alias
+db.removeAlias(alias)                  // Remove alias
+db.getAliases()                        // Get all aliases
+db.isAlias(name)                       // Check if name is alias
+
+// Database health & validation (NEW!)
+await db.validate()                // Database integrity check
+await db.isAccessible()            // Check if database path is accessible
 
 // Utilities
 await db.getStats()                // Database statistics
 db.getOptions()                     // Current configuration
 db.clearCaches()                    // Clear all caches
 await db.compact()                  // Optimize storage
+await db.backup(path)               // Backup (stub - not fully implemented)
 ```
 
 #### Collection Operations
@@ -483,10 +723,14 @@ await collection.stats()                         // Collection stats
 
 1. **Use Indexes**: Create indexes on frequently queried fields
 2. **Enable Caching**: Keep `cacheDocuments: true` for better read performance
-3. **Batch Operations**: Use `insertMany()` for bulk inserts
-4. **Limit Results**: Use `limit()` and `skip()` for pagination
-5. **Project Fields**: Use `select()` to return only needed fields
-6. **Monitor Stats**: Use `stats()` to monitor performance metrics
+3. **Leverage Query Caching**: Identical queries are automatically cached for 5 seconds
+4. **Batch Operations**: Use `insertMany()` for bulk inserts
+5. **Limit Results**: Use `limit()` and `skip()` for pagination
+6. **Project Fields**: Use `select()` to return only needed fields
+7. **Use Aliases**: Create short aliases for frequently accessed collections
+8. **Monitor Health**: Use `validate()` to catch performance issues early
+9. **Clear Caches**: Use `clearCaches()` when memory usage is high
+10. **Monitor Stats**: Use `stats()` to monitor performance metrics
 
 ## Support
 

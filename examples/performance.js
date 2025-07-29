@@ -21,7 +21,7 @@ async function performanceExample() {
 
     // Example 1: Bulk insert performance
     console.log('1. Bulk Insert Performance:');
-    const startTime = Date.now();
+    const startTime = process.hrtime.bigint();
 
     const bulkData = Array.from({ length: 1000 }, (_, i) => ({
       name: `User ${i}`,
@@ -34,10 +34,10 @@ async function performanceExample() {
     }));
 
     const insertResult = await users.insertMany(bulkData);
-    const insertTime = Date.now() - startTime;
+    const insertTime = Number(process.hrtime.bigint() - startTime) / 1000000;
 
     console.log(
-      `   ✅ Inserted ${insertResult.insertedCount} documents in ${insertTime}ms`
+      `   ✅ Inserted ${insertResult.insertedCount} documents in ${insertTime.toFixed(3)}ms`
     );
     console.log(
       `   📊 Average: ${((insertResult.insertedCount / insertTime) * 1000).toFixed(2)} docs/sec`
@@ -206,14 +206,65 @@ async function performanceExample() {
     await db.compact();
     console.log('   ✅ Database compacted');
 
-    // Example 12: Performance tips
-    console.log('\n12. Performance Tips:');
+    // Example 12: Query caching performance (NEW!)
+    console.log('\n12. Query Caching Performance:');
+    
+    // Clear any existing caches first
+    users.clearCache();
+    
+    const cacheQuery = { active: true, age: { $gte: 25 } };
+    
+    // First query - cache miss
+    const queryStart1 = Date.now();
+    const result1 = await users.find(cacheQuery);
+    const queryTime1 = Date.now() - queryStart1;
+    
+    // Second identical query - cache hit (within 5 seconds)
+    const queryStart2 = Date.now();
+    const result2 = await users.find(cacheQuery);
+    const queryTime2 = Date.now() - queryStart2;
+    
+    console.log(`   📊 First query (cache miss): ${queryTime1}ms`);
+    console.log(`   📊 Second query (cache hit): ${queryTime2}ms`);
+    console.log(`   📊 Query cache speedup: ${(queryTime1 / Math.max(queryTime2, 1)).toFixed(2)}x`);
+    
+    // Example 13: Collection aliases performance (NEW!)
+    console.log('\n13. Collection Aliases Performance:');
+    
+    // Create a short alias for the collection
+    db.createAlias('u', 'users');
+    
+    const aliasStart = Date.now();
+    const usersViaAlias = db.collection('u');
+    const aliasResult = await usersViaAlias.count();
+    const aliasTime = Date.now() - aliasStart;
+    
+    console.log(`   📊 Alias access time: ${aliasTime}ms`);
+    console.log(`   📊 Count via alias: ${aliasResult}`);
+    console.log('   💡 Aliases provide no performance penalty!');
+    
+    // Example 14: Database health monitoring (NEW!)
+    console.log('\n14. Database Health Monitoring:');
+    
+    const healthStart = Date.now();
+    const health = await db.validate();
+    const healthTime = Date.now() - healthStart;
+    
+    console.log(`   📊 Health check completed in: ${healthTime}ms`);
+    console.log(`   📊 Database is ${health.isValid ? 'healthy' : 'unhealthy'}`);
+    console.log(`   📊 Issues found: ${health.issues.length}`);
+    
+    // Example 15: Performance tips
+    console.log('\n15. Performance Tips:');
     console.log('   💡 Use indexes for frequently queried fields');
     console.log('   💡 Enable caching for read-heavy workloads');
     console.log('   💡 Use batch operations for bulk data');
     console.log('   💡 Use QueryBuilder for complex queries');
     console.log('   💡 Monitor cache hit rates');
     console.log('   💡 Compact database periodically');
+    console.log('   💡 Query caching automatically speeds up identical queries');
+    console.log('   💡 Use aliases for shorter, cleaner code');
+    console.log('   💡 Monitor database health regularly');
 
     await db.close();
     console.log('\n✅ Performance database closed');

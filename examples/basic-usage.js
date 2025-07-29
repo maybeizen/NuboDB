@@ -30,7 +30,7 @@ async function basicUsage() {
       },
     });
 
-    console.log('✅ Inserted user with ID:', insertResult.insertedId);
+    console.log('✅ Inserted user with ID:', insertResult.id);
 
     // Insert multiple documents
     const batchResult = await users.insertMany([
@@ -69,7 +69,7 @@ async function basicUsage() {
     console.log('✅ Found John:', john?.name);
 
     // Find by ID
-    const userById = await users.findById(insertResult.insertedId);
+    const userById = await users.findById(insertResult.id);
     console.log('✅ Found user by ID:', userById?.name);
 
     // Update document
@@ -101,6 +101,16 @@ async function basicUsage() {
     // Get collection statistics
     const stats = await users.stats();
     console.log('✅ Collection stats:', stats);
+
+    // Collection aliases (NEW!)
+    db.createAlias('u', 'users');
+    const usersViaAlias = db.collection('u');
+    const aliasCount = await usersViaAlias.count();
+    console.log('✅ Count via alias:', aliasCount);
+
+    // Database health check (NEW!)
+    const health = await db.validate();
+    console.log('✅ Database health:', health.isValid ? 'Healthy' : 'Issues found');
 
     // Clear cache
     users.clearCache();

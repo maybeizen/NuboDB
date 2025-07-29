@@ -12,6 +12,33 @@ import { QueryBuilder as QueryBuilderImpl } from './QueryBuilder';
 
 /** @typeParam T Document type for this collection */
 export class QueryOperations<T = Document> extends BaseCollection<T> {
+  private queryCache: Map<
+    string,
+    { result: FindResult<T>; timestamp: number }
+  > = new Map();
+  private readonly CACHE_TTL = 5000; // 5s cache ttl
+  private getCacheKey(filter: QueryFilter, options: QueryOptions): string {
+    return JSON.stringify({ filter, options });
+  }
+
+  private isCacheValid(timestamp: number): boolean {
+    return Date.now() - timestamp < this.CACHE_TTL;
+  }
+
+  private cleanCache(): void {
+    const now = Date.now();
+    for (const [key, { timestamp }] of this.queryCache) {
+      if (now - timestamp >= this.CACHE_TTL) {
+        this.queryCache.delete(key);
+      }
+    }
+  }
+
+  /** Clear all query cache */
+  public clearQueryCache(): void {
+    this.queryCache.clear();
+  }
+
   /** @param filter MongoDB-like query filter
    * @param options Query options (sort, limit, skip, projection)
    * @returns Query result with documents and metadata */
@@ -20,6 +47,12 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     options: QueryOptions = {}
   ): Promise<FindResult<T>> {
     await this.ensureInitialized();
+
+    const cacheKey = this.getCacheKey(filter, options);
+    const cached = this.queryCache.get(cacheKey);
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      return cached.result;
+    }
 
     try {
       const limit = options.limit || Number.MAX_SAFE_INTEGER;
@@ -89,11 +122,19 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
         );
       }
 
-      return {
+      const result = {
         documents: filteredDocuments,
         total,
         hasMore: total > skip + filteredDocuments.length,
       };
+
+      this.queryCache.set(cacheKey, { result, timestamp: Date.now() });
+
+      if (this.queryCache.size > 100) {
+        this.cleanCache();
+      }
+
+      return result;
     } catch (error) {
       throw new CollectionError(
         `Find failed: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -452,5 +493,11 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
       }
     }
     return documents;
+  }
+
+  /** Override clearCache to also clear query cache */
+  clearCache(): void {
+    super.clearCache();
+    this.clearQueryCache();
   }
 }

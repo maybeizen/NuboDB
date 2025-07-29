@@ -21,6 +21,7 @@ class NuboDB extends EventEmitter {
   private storage: FileStorage;
   private encryptionManager?: EncryptionManager;
   private collections: Map<string, Collection> = new Map();
+  private aliases: Map<string, string> = new Map();
   private isOpen: boolean = false;
   private startTime: number = Date.now();
   private logger: { log: (level: string, message: string) => void } | null =
@@ -123,7 +124,7 @@ class NuboDB extends EventEmitter {
     }
   }
 
-  /** @param name Collection name
+  /** @param name Collection name or alias
    * @param options Collection-specific settings
    * @returns Collection instance for CRUD operations */
   public collection<T = Document>(
@@ -137,7 +138,9 @@ class NuboDB extends EventEmitter {
       );
     }
 
-    if (!this.collections.has(name)) {
+    const actualName = this.aliases.get(name) || name;
+
+    if (!this.collections.has(actualName)) {
       const collectionOptions: CollectionOptions = {
         autoIndex: true,
         maxDocuments: 1000000,
@@ -149,17 +152,17 @@ class NuboDB extends EventEmitter {
       }
 
       const collection = new Collection<T>(
-        name,
+        actualName,
         this.storage,
         collectionOptions
       );
-      this.collections.set(name, collection as Collection);
+      this.collections.set(actualName, collection as Collection);
 
-      this.log(`Collection '${name}' accessed`, 'debug');
-      this.emit('collection:accessed', name);
+      this.log(`Collection '${actualName}' accessed`, 'debug');
+      this.emit('collection:accessed', actualName);
     }
 
-    return this.collections.get(name)! as Collection<T>;
+    return this.collections.get(actualName)! as Collection<T>;
   }
 
   /** @param name Collection name
@@ -369,6 +372,98 @@ class NuboDB extends EventEmitter {
     if (this.options.debug && this.logger) {
       this.logger.log(level, `[NuboDB] ${message}`);
     }
+  }
+
+  /** Validate database integrity and return health status */
+  public async validate(): Promise<{
+    isValid: boolean;
+    issues: string[];
+    collections: Record<string, { documents: number; issues: string[] }>;
+  }> {
+    if (!this.isOpen) {
+      throw new DatabaseError(
+        'Database is not open. Call open() first.',
+        'NOT_OPEN_ERROR'
+      );
+    }
+
+    const issues: string[] = [];
+    const collections: Record<string, { documents: number; issues: string[] }> =
+      {};
+
+    try {
+      for (const [name, collection] of this.collections) {
+        const collectionIssues: string[] = [];
+        const stats = await collection.stats();
+
+        if (stats.totalDocuments === 0 && stats.cacheSize > 0) {
+          collectionIssues.push('Cache-storage mismatch detected');
+        }
+
+        collections[name] = {
+          documents: stats.totalDocuments,
+          issues: collectionIssues,
+        };
+
+        issues.push(
+          ...collectionIssues.map(issue => `Collection '${name}': ${issue}`)
+        );
+      }
+
+      return {
+        isValid: issues.length === 0,
+        issues,
+        collections,
+      };
+    } catch (error) {
+      const errorMsg = `Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.log(errorMsg, 'error');
+      throw new DatabaseError(errorMsg, 'VALIDATION_ERROR');
+    }
+  }
+
+  /** Check if database path exists and is accessible */
+  public async isAccessible(): Promise<boolean> {
+    try {
+      await this.storage.ensureDirectory(this.options.path!);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Create an alias for a collection name */
+  public createAlias(alias: string, collectionName: string): void {
+    if (this.aliases.has(alias)) {
+      throw new DatabaseError(
+        `Alias '${alias}' already exists`,
+        'ALIAS_EXISTS_ERROR'
+      );
+    }
+    this.aliases.set(alias, collectionName);
+    this.log(
+      `Alias '${alias}' created for collection '${collectionName}'`,
+      'debug'
+    );
+  }
+
+  /** Remove an alias */
+  public removeAlias(alias: string): boolean {
+    const removed = this.aliases.delete(alias);
+    if (removed) {
+      this.log(`Alias '${alias}' removed`, 'debug');
+    }
+    return removed;
+  }
+
+  /** Get all aliases */
+  public getAliases(): Record<string, string> {
+    return Object.fromEntries(this.aliases);
+  }
+
+  /** Check if a name is an alias */
+  public isAlias(name: string): boolean {
+    return this.aliases.has(name);
   }
 
   public on<K extends keyof DatabaseEvents>(
