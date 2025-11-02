@@ -13,5 +13,7 @@ export default defineConfig([
     treeshake: true,
     minify: true,
     external: [],
+    tsconfig: './tsconfig.json',
+    onSuccess: 'echo "Build completed"',
   },
 ]);

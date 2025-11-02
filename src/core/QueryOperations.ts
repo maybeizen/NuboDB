@@ -9,29 +9,53 @@ import type { DocumentWithMetadata } from './BaseCollection';
 import { BaseCollection } from './BaseCollection';
 import { CollectionError } from '../errors/DatabaseError';
 import { QueryBuilder as QueryBuilderImpl } from './QueryBuilder';
+import { QueryCacheManager } from './query/QueryCacheManager';
+import { DocumentLoader } from './query/DocumentLoader';
+import { IndexQueryResolver } from './query/IndexQueryResolver';
+import { QueryFilterEngine } from './query/QueryFilter';
+import { QuerySorter } from './query/QuerySorter';
+import { QueryProjector } from './query/QueryProjector';
 
 /** @typeParam T Document type for this collection */
 export class QueryOperations<T = Document> extends BaseCollection<T> {
-  private queryCache: Map<
-    string,
-    { result: FindResult<T>; timestamp: number }
-  > = new Map();
-  private readonly CACHE_TTL = 5000; // 5s cache ttl
-  private getCacheKey(filter: QueryFilter, options: QueryOptions): string {
-    return JSON.stringify({ filter, options });
+  private queryCache: QueryCacheManager<T>;
+  private documentLoader: DocumentLoader<T>;
+  private indexResolver: IndexQueryResolver;
+  private filterEngine: QueryFilterEngine<T>;
+  private sorter: QuerySorter<T>;
+  private projector: QueryProjector<T>;
+
+  constructor(
+    name: string,
+    storage: import('../storage/FileStorage').FileStorage,
+    options: import('./types').CollectionOptions = {}
+  ) {
+    super(name, storage, options);
+
+    this.queryCache = new QueryCacheManager<T>();
+    this.documentLoader = new DocumentLoader<T>(
+      this.storage,
+      this.encryptionManager,
+      this.cache,
+      this.name,
+      this.options.maxCacheSize || 1000
+    );
+    this.indexResolver = new IndexQueryResolver(
+      this.indexes,
+      this.indexManager.fieldMetadata
+    );
+    this.filterEngine = new QueryFilterEngine<T>();
+    this.sorter = new QuerySorter<T>();
+    this.projector = new QueryProjector<T>();
   }
 
-  private isCacheValid(timestamp: number): boolean {
-    return Date.now() - timestamp < this.CACHE_TTL;
-  }
-
-  private cleanCache(): void {
-    const now = Date.now();
-    for (const [key, { timestamp }] of this.queryCache) {
-      if (now - timestamp >= this.CACHE_TTL) {
-        this.queryCache.delete(key);
-      }
-    }
+  /** Rebuild index resolver mapping (call when indexes change) */
+  public async rebuildIndexResolver(): Promise<void> {
+    this.indexResolver = new IndexQueryResolver(
+      this.indexes,
+      this.indexManager.fieldMetadata
+    );
+    await this.indexResolver.rebuildFieldMapping();
   }
 
   /** Clear all query cache */
@@ -48,10 +72,10 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
   ): Promise<FindResult<T>> {
     await this.ensureInitialized();
 
-    const cacheKey = this.getCacheKey(filter, options);
+    const cacheKey = this.queryCache.getCacheKey(filter, options);
     const cached = this.queryCache.get(cacheKey);
-    if (cached && this.isCacheValid(cached.timestamp)) {
-      return cached.result;
+    if (cached) {
+      return cached;
     }
 
     try {
@@ -62,49 +86,24 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
         Object.keys(filter).length === 0 &&
         limit !== Number.MAX_SAFE_INTEGER
       ) {
-        const documents = await this.getAllDocuments();
-        const sliced = documents.slice(skip, skip + limit);
-
-        let result = sliced;
-        if (options.sort && result.length > 1) {
-          result = this.sortDocuments(result, options.sort);
-        }
-        if (options.projection) {
-          result = this.projectDocuments(result, options.projection);
-        }
-
-        return {
-          documents: result,
-          total: documents.length,
-          hasMore: documents.length > skip + result.length,
-        };
+        return this.handleEmptyFilterQuery(options, limit, skip);
       }
 
-      let documents: T[];
-      let useIndexOptimization = false;
+      const documents = await this.loadDocumentsForQuery(filter);
+      const maxFilterResults =
+        limit !== Number.MAX_SAFE_INTEGER
+          ? Math.min(limit + skip, documents.length)
+          : documents.length;
 
-      if (this.indexes.size > 0) {
-        const allDocs = await this.getAllDocuments();
-        const indexedDocs = this.useIndexes(allDocs, filter);
-        if (indexedDocs.length < allDocs.length && indexedDocs.length > 0) {
-          documents = indexedDocs;
-          useIndexOptimization = true;
-        } else {
-          documents = allDocs;
-        }
-      } else {
-        documents = await this.getAllDocuments();
-      }
-
-      let filteredDocuments = this.filterDocuments(
+      let filteredDocuments = await this.filterEngine.filter(
         documents,
         filter,
-        useIndexOptimization ? documents.length : limit + skip
+        maxFilterResults
       );
-      const total = filteredDocuments.length;
+      const total = await this.calculateTotalCount(filter, documents);
 
       if (options.sort && filteredDocuments.length > 1) {
-        filteredDocuments = this.sortDocuments(filteredDocuments, options.sort);
+        filteredDocuments = await this.sorter.sort(filteredDocuments, options.sort);
       }
 
       if (skip > 0) {
@@ -116,7 +115,7 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
       }
 
       if (options.projection) {
-        filteredDocuments = this.projectDocuments(
+        filteredDocuments = await this.projector.project(
           filteredDocuments,
           options.projection
         );
@@ -128,11 +127,7 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
         hasMore: total > skip + filteredDocuments.length,
       };
 
-      this.queryCache.set(cacheKey, { result, timestamp: Date.now() });
-
-      if (this.queryCache.size > 100) {
-        this.cleanCache();
-      }
+      this.queryCache.set(cacheKey, result);
 
       return result;
     } catch (error) {
@@ -140,6 +135,67 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
         `Find failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
+  }
+
+  /** Handle queries with empty filter
+   * @param options Query options
+   * @param limit Result limit
+   * @param skip Skip count
+   * @returns Query result */
+  private async handleEmptyFilterQuery(
+    options: QueryOptions,
+    limit: number,
+    skip: number
+  ): Promise<FindResult<T>> {
+    const documents = await this.getAllDocuments();
+    const sliced = documents.slice(skip, skip + limit);
+
+    let result = sliced;
+    if (options.sort && result.length > 1) {
+      result = await this.sorter.sort(result, options.sort);
+    }
+    if (options.projection) {
+      result = await this.projector.project(result, options.projection);
+    }
+
+    return {
+      documents: result,
+      total: documents.length,
+      hasMore: documents.length > skip + result.length,
+    };
+  }
+
+  /** Load documents for a query, using indexes when available
+   * @param filter Query filter
+   * @returns Array of candidate documents */
+  private async loadDocumentsForQuery(filter: QueryFilter): Promise<T[]> {
+    if (this.indexes.size > 0) {
+      const candidateIds = await this.indexResolver.getCandidateIds(filter);
+
+      if (candidateIds && candidateIds.size > 0) {
+        const candidateIdsArray = Array.from(candidateIds);
+        return this.documentLoader.loadByIds(candidateIdsArray);
+      } else if (candidateIds && candidateIds.size === 0) {
+        return [];
+      }
+    }
+
+    return this.getAllDocuments();
+  }
+
+  /** Calculate total count using indexes when possible
+   * @param filter Query filter
+   * @param documents Loaded documents
+   * @returns Total count */
+  private async calculateTotalCount(filter: QueryFilter, documents: T[]): Promise<number> {
+    if (this.indexes.size > 0) {
+      const candidateIds = await this.indexResolver.getCandidateIds(filter);
+      if (candidateIds !== null) {
+        return (await this.filterEngine.filter(documents, filter, documents.length))
+          .length;
+      }
+    }
+    return documents.length;
   }
 
   /** @param filter Query filter to match documents
@@ -159,22 +215,8 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
     }
 
     try {
-      const document = await this.storage.readDocument(this.name, id);
-      if (document) {
-        let decryptedDocument = document;
-        if (this.encryptionManager && document.data) {
-          decryptedDocument = this.encryptionManager.decryptObject(
-            document.data as string
-          );
-        }
-
-        if (this.cache.size < (this.options.maxCacheSize || 1000)) {
-          this.cache.set(id, decryptedDocument as T);
-        }
-        return decryptedDocument as T;
-      }
-
-      return null;
+      const documents = await this.documentLoader.loadByIds([id]);
+      return documents[0] || null;
     } catch (error) {
       throw new CollectionError(
         `FindById failed: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -197,302 +239,6 @@ export class QueryOperations<T = Document> extends BaseCollection<T> {
   /** @returns True if collection is empty */
   async isEmpty(): Promise<boolean> {
     return (await this.count()) === 0;
-  }
-
-  /**
-   * @param documents - Documents to filter
-   * @param filter - Query filter to apply
-   */
-  private filterDocuments(
-    documents: T[],
-    filter: QueryFilter,
-    maxResults: number
-  ): T[] {
-    const results: T[] = [];
-    const filterEntries = Object.entries(filter);
-
-    for (const document of documents) {
-      if (results.length >= maxResults) break;
-
-      if (this.matchesFilter(document, filterEntries)) {
-        results.push(document);
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * @param document - Document to check
-   * @param filterEntries - Query filter entries
-   */
-  private matchesFilter(
-    document: T,
-    filterEntries: Array<[string, unknown]>
-  ): boolean {
-    for (const [field, value] of filterEntries) {
-      if (field.startsWith('$')) {
-        if (!this.matchesLogicalOperator(document, field, value as unknown[])) {
-          return false;
-        }
-      } else {
-        const fieldValue = (document as Record<string, unknown>)[field];
-        if (typeof value === 'object' && value !== null) {
-          if (
-            !this.matchesComparisonOperators(
-              fieldValue,
-              value as Record<string, unknown>
-            )
-          ) {
-            return false;
-          }
-        } else {
-          if (fieldValue !== value) {
-            return false;
-          }
-        }
-      }
-    }
-    return true;
-  }
-
-  /**
-   * @param document - Document to check
-   * @param operator - Logical operator
-   * @param conditions - Array of conditions to evaluate
-   */
-  private matchesLogicalOperator(
-    document: T,
-    operator: string,
-    conditions: unknown[]
-  ): boolean {
-    switch (operator) {
-      case '$and':
-        return conditions.every(condition =>
-          this.matchesFilter(
-            document,
-            Object.entries(condition as Record<string, unknown>)
-          )
-        );
-      case '$or':
-        return conditions.some(condition =>
-          this.matchesFilter(
-            document,
-            Object.entries(condition as Record<string, unknown>)
-          )
-        );
-      case '$nor':
-        return !conditions.some(condition =>
-          this.matchesFilter(
-            document,
-            Object.entries(condition as Record<string, unknown>)
-          )
-        );
-      default:
-        return true;
-    }
-  }
-
-  /**
-   * @param value - Document field value
-   * @param operators - Comparison operators to apply
-   */
-  private matchesComparisonOperators(
-    value: unknown,
-    operators: Record<string, unknown>
-  ): boolean {
-    const operatorEntries = Object.entries(operators);
-
-    for (const [operator, operatorValue] of operatorEntries) {
-      switch (operator) {
-        case '$eq':
-          if (value !== operatorValue) return false;
-          break;
-        case '$ne':
-          if (value === operatorValue) return false;
-          break;
-        case '$gt':
-          if (
-            typeof value === 'number' &&
-            typeof operatorValue === 'number' &&
-            value <= operatorValue
-          )
-            return false;
-          break;
-        case '$gte':
-          if (
-            typeof value === 'number' &&
-            typeof operatorValue === 'number' &&
-            value < operatorValue
-          )
-            return false;
-          break;
-        case '$lt':
-          if (
-            typeof value === 'number' &&
-            typeof operatorValue === 'number' &&
-            value >= operatorValue
-          )
-            return false;
-          break;
-        case '$lte':
-          if (
-            typeof value === 'number' &&
-            typeof operatorValue === 'number' &&
-            value > operatorValue
-          )
-            return false;
-          break;
-        case '$in':
-          if (
-            !Array.isArray(operatorValue) ||
-            !(operatorValue as any[]).includes(value)
-          ) {
-            return false;
-          }
-          break;
-        case '$nin':
-          if (
-            Array.isArray(operatorValue) &&
-            (operatorValue as any[]).includes(value)
-          ) {
-            return false;
-          }
-          break;
-        case '$exists':
-          if (operatorValue && value === undefined) return false;
-          if (!operatorValue && value !== undefined) return false;
-          break;
-        case '$regex':
-          if (
-            typeof value !== 'string' ||
-            !new RegExp(operatorValue as string).test(value)
-          ) {
-            return false;
-          }
-          break;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * @param documents - Documents to sort
-   * @param sort - Sort specification (field: direction)
-   */
-  private sortDocuments(
-    documents: T[],
-    sort: { [field: string]: 1 | -1 } | Array<[string, 1 | -1]>
-  ): T[] {
-    if (documents.length <= 1) return documents;
-
-    const sortArray = Array.isArray(sort) ? sort : Object.entries(sort);
-    const sortFields = sortArray.map(([field, direction]) => ({
-      field,
-      direction,
-    }));
-
-    return documents.slice().sort((a, b) => {
-      for (const { field, direction } of sortFields) {
-        const aVal = (a as Record<string, unknown>)[field];
-        const bVal = (b as Record<string, unknown>)[field];
-
-        if (aVal == null && bVal == null) continue;
-        if (aVal == null) return -1 * direction;
-        if (bVal == null) return 1 * direction;
-
-        const aType = typeof aVal;
-        const bType = typeof bVal;
-
-        if (aType === bType) {
-          if (aType === 'string') {
-            const result = (aVal as string).localeCompare(bVal as string);
-            if (result !== 0) return result * direction;
-          } else if (aType === 'number') {
-            const diff = (aVal as number) - (bVal as number);
-            if (diff !== 0) return diff * direction;
-          } else if (aVal instanceof Date && bVal instanceof Date) {
-            const diff = aVal.getTime() - bVal.getTime();
-            if (diff !== 0) return diff * direction;
-          } else {
-            if (aVal < bVal) return -1 * direction;
-            if (aVal > bVal) return 1 * direction;
-          }
-        }
-      }
-      return 0;
-    });
-  }
-
-  /**
-   * @param documents - Documents to project
-   * @param projection - Field projection specification
-   */
-  private projectDocuments(
-    documents: T[],
-    projection: { [field: string]: 0 | 1 }
-  ): T[] {
-    const projectionEntries = Object.entries(projection);
-    const includeFields = projectionEntries
-      .filter(([_, value]) => value === 1)
-      .map(([field, _]) => field);
-
-    const excludeFields = projectionEntries
-      .filter(([_, value]) => value === 0)
-      .map(([field, _]) => field);
-
-    return documents.map(document => {
-      const projected: Record<string, unknown> = {};
-
-      if (includeFields.length > 0) {
-        for (const field of includeFields) {
-          if (Object.prototype.hasOwnProperty.call(document, field)) {
-            projected[field] = (document as Record<string, unknown>)[field];
-          }
-        }
-      } else {
-        const docKeys = Object.keys(document as Record<string, unknown>);
-        for (const field of docKeys) {
-          if (!excludeFields.includes(field)) {
-            projected[field] = (document as Record<string, unknown>)[field];
-          }
-        }
-      }
-
-      return projected as T;
-    });
-  }
-
-  /**
-   * @param documents - Documents to filter
-   * @param filter - Query filter to apply
-   */
-  private useIndexes(documents: T[], filter: QueryFilter): T[] {
-    const filterEntries = Object.entries(filter);
-
-    for (const [field, value] of filterEntries) {
-      if (this.indexes.has(field) && typeof value !== 'object') {
-        const index = this.indexes.get(field)!;
-        const documentIds = index.get(value) || [];
-
-        if (documentIds.length === 0) {
-          return [];
-        }
-
-        const idSet = new Set(documentIds);
-
-        const filtered: T[] = [];
-        for (const doc of documents) {
-          const docWithMetadata = doc as T & DocumentWithMetadata;
-          if (idSet.has(docWithMetadata._id)) {
-            filtered.push(doc);
-          }
-        }
-
-        return filtered;
-      }
-    }
-    return documents;
   }
 
   /** Override clearCache to also clear query cache */

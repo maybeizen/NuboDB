@@ -4,18 +4,19 @@ import {
   randomBytes,
   createHash,
 } from 'crypto';
+import { serialize, deserialize } from 'bson';
 import { EncryptionError } from '../errors/DatabaseError';
 
 /**
  * Handles encryption and decryption of data using AES-256-CBC
  * with SHA-256 key derivation (deterministic).
+ * Now works with BSON format for better performance.
  */
 export class EncryptionManager {
   private key: Buffer;
   private algorithm: string;
   private readonly IV_LENGTH = 16;
   private readonly HEX_ENCODING = 'hex' as const;
-  private readonly UTF8_ENCODING = 'utf8' as const;
 
   /**
    * @param encryptionKey Password/key for encryption
@@ -36,16 +37,16 @@ export class EncryptionManager {
   }
 
   /**
-   * Encrypts a string of data.
-   * @param data String to encrypt
-   * @returns Encrypted data in "iv:encrypted" format
+   * Encrypts a Buffer of data.
+   * @param data Buffer to encrypt
+   * @returns Encrypted data in "iv:encrypted" format (hex encoded)
    */
-  encrypt(data: string): string {
+  encryptBuffer(data: Buffer): string {
     try {
       const iv = randomBytes(this.IV_LENGTH);
       const cipher = createCipheriv(this.algorithm, this.key, iv);
 
-      const encrypted1 = cipher.update(data, this.UTF8_ENCODING);
+      const encrypted1 = cipher.update(data);
       const encrypted2 = cipher.final();
       const encryptedBuffer = Buffer.concat([encrypted1, encrypted2]);
 
@@ -62,11 +63,11 @@ export class EncryptionManager {
   }
 
   /**
-   * Decrypts a string from "iv:encrypted" format.
-   * @param encryptedData Encrypted data string
-   * @returns Decrypted string
+   * Decrypts a Buffer from "iv:encrypted" format.
+   * @param encryptedData Encrypted data string (hex encoded)
+   * @returns Decrypted buffer
    */
-  decrypt(encryptedData: string): string {
+  decryptBuffer(encryptedData: string): Buffer {
     try {
       const colonIndex = encryptedData.indexOf(':');
       if (colonIndex === -1) {
@@ -88,7 +89,7 @@ export class EncryptionManager {
       const decrypted2 = decipher.final();
       const decryptedBuffer = Buffer.concat([decrypted1, decrypted2]);
 
-      return decryptedBuffer.toString(this.UTF8_ENCODING);
+      return decryptedBuffer;
     } catch (error) {
       throw new EncryptionError(
         `Decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -97,29 +98,49 @@ export class EncryptionManager {
   }
 
   /**
-   * Encrypts a JS object (by JSON.stringify)
+   * Encrypts a string of data (legacy support).
+   * @param data String to encrypt
+   * @returns Encrypted data in "iv:encrypted" format
+   */
+  encrypt(data: string): string {
+    return this.encryptBuffer(Buffer.from(data, 'utf8'));
+  }
+
+  /**
+   * Decrypts a string from "iv:encrypted" format (legacy support).
+   * @param encryptedData Encrypted data string
+   * @returns Decrypted string
+   */
+  decrypt(encryptedData: string): string {
+    return this.decryptBuffer(encryptedData).toString('utf8');
+  }
+
+  /**
+   * Encrypts a JS object using BSON serialization for better performance
    * @param obj Object to encrypt
-   * @returns Encrypted JSON string
+   * @returns Encrypted BSON buffer (hex encoded string)
    */
   encryptObject(obj: any): string {
     if (typeof obj === 'string') {
       return this.encrypt(obj);
     }
-    const jsonString = JSON.stringify(obj);
-    return this.encrypt(jsonString);
+    const bsonBuffer = Buffer.from(serialize(obj));
+    return this.encryptBuffer(bsonBuffer);
   }
 
   /**
-   * Decrypts encrypted JSON string to an object
-   * @param encryptedData Encrypted JSON string
+   * Decrypts encrypted BSON buffer to an object
+   * @param encryptedData Encrypted BSON buffer (hex encoded string)
    * @returns Decrypted object
    */
   decryptObject(encryptedData: string): any {
-    const decryptedString = this.decrypt(encryptedData);
     try {
-      return JSON.parse(decryptedString);
+      const decryptedBuffer = this.decryptBuffer(encryptedData);
+      return deserialize(decryptedBuffer);
     } catch (error) {
-      return decryptedString;
+      throw new EncryptionError(
+        `Decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 

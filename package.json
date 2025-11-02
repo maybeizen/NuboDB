@@ -1,6 +1,6 @@
 {
   "name": "nubodb",
-  "version": "1.4.0-alpha",
+  "version": "2.0.0-alpha",
   "description": "A modern, fast, and feature-rich NoSQL database for Node.js with TypeScript support, encryption, schema validation, and modular architecture.",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "node build.js",
+    "build:ts": "tsup",
+    "build:go": "cd native/go && go build -o ../../dist/nubodb-native .",
     "build:js": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint . --ext .ts",
@@ -76,5 +78,8 @@
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.36.0"
+  },
+  "dependencies": {
+    "bson": "^6.10.4"
   }
 }

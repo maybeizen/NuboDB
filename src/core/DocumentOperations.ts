@@ -9,19 +9,22 @@ import type {
 } from './types';
 import type { DocumentWithMetadata } from './BaseCollection';
 import { BaseCollection } from './BaseCollection';
-import {
-  validateSchema,
-  applyDefaults,
-  sanitizeDocument,
-} from '../utils/schema';
-import { createDocumentMetadata, generateTimestamp } from '../utils/id';
 import { DocumentError } from '../errors/DatabaseError';
 import { QueryOperations } from './QueryOperations';
 import { CollectionOptions } from './types';
+import {
+  DocumentProcessor,
+  DocumentValidator,
+  DocumentEncryption,
+  IndexManager,
+} from './document';
 
 /** @typeParam T Document type for this collection */
 export class DocumentOperations<T = Document> extends BaseCollection<T> {
   private queryOps: QueryOperations<T>;
+  private processor: DocumentProcessor<T>;
+  private validator: DocumentValidator<T>;
+  private encryption: DocumentEncryption<T>;
 
   /** @param name Collection name
    * @param storage Storage engine instance
@@ -33,6 +36,9 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
   ) {
     super(name, storage, options);
     this.queryOps = new QueryOperations<T>(name, storage, options);
+    this.processor = new DocumentProcessor<T>();
+    this.validator = new DocumentValidator<T>(this.schema);
+    this.encryption = new DocumentEncryption<T>(this.encryptionManager);
   }
 
   /** @param data Document data to insert
@@ -41,33 +47,9 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
     await this.ensureInitialized();
 
     try {
-      let processedData = { ...data };
-
-      if (this.schema) {
-        validateSchema(processedData, this.schema);
-        processedData = applyDefaults(processedData, this.schema);
-      }
-
-      const metadata = createDocumentMetadata();
-      const document = {
-        _id: metadata.id,
-        _createdAt: metadata.createdAt,
-        _updatedAt: metadata.updatedAt,
-        _version: 1,
-        ...sanitizeDocument(processedData),
-      } as T & DocumentWithMetadata;
-
-      let documentToStore = document;
-      if (this.encryptionManager) {
-        const encryptedData = this.encryptionManager.encryptObject(document);
-        documentToStore = {
-          _id: document._id,
-          _createdAt: document._createdAt,
-          _updatedAt: document._updatedAt,
-          _version: document._version!,
-          data: encryptedData,
-        } as unknown as T & DocumentWithMetadata;
-      }
+      const processedData = this.validator.validateAndProcess(data);
+      const document = this.processor.createDocument(processedData);
+      const documentToStore = this.encryption.encrypt(document);
 
       await this.storage.writeDocument(this.name, documentToStore);
 
@@ -100,7 +82,6 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
     }
 
     try {
-      const insertedIds: string[] = [];
       const processedDocuments: (T & DocumentWithMetadata)[] = [];
 
       const batchSize = 100;
@@ -108,58 +89,35 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
         const batch = documents.slice(i, i + batchSize);
 
         for (const data of batch) {
-          let processedData = { ...data };
-
-          if (this.schema) {
-            validateSchema(processedData, this.schema);
-            processedData = applyDefaults(processedData, this.schema);
-          }
-
-          const metadata = createDocumentMetadata();
-          const document = {
-            _id: metadata.id,
-            _createdAt: metadata.createdAt,
-            _updatedAt: metadata.updatedAt,
-            _version: 1,
-            ...sanitizeDocument(processedData),
-          } as T & DocumentWithMetadata;
-
-          insertedIds.push(document._id);
+          const processedData = this.validator.validateAndProcess(data);
+          const document = this.processor.createDocument(processedData);
           processedDocuments.push(document);
         }
       }
 
       const writePromises = processedDocuments.map(async document => {
-        let documentToStore = document;
-        if (this.encryptionManager) {
-          const encryptedData = this.encryptionManager.encryptObject(document);
-          documentToStore = {
-            _id: document._id,
-            _createdAt: document._createdAt,
-            _updatedAt: document._updatedAt,
-            _version: document._version!,
-            data: encryptedData,
-          } as unknown as T & DocumentWithMetadata;
-        }
+        const documentToStore = this.encryption.encrypt(document);
         return this.storage.writeDocument(this.name, documentToStore);
       });
 
       await Promise.all(writePromises);
 
-      const cacheUpdates: Array<Promise<void>> = [];
+      const indexUpdates: Promise<void>[] = [];
       processedDocuments.forEach(document => {
         if (this.cache.size < (this.options.maxCacheSize || 1000)) {
           this.cache.set(document._id, document as T);
         }
 
         if (this.options.autoIndex) {
-          cacheUpdates.push(this.updateIndexes(document, 'insert'));
+          indexUpdates.push(this.updateIndexes(document, 'insert'));
         }
       });
 
-      if (cacheUpdates.length > 0) {
-        await Promise.all(cacheUpdates);
+      if (indexUpdates.length > 0) {
+        await Promise.all(indexUpdates);
       }
+
+      const insertedIds = processedDocuments.map(doc => doc._id);
 
       return {
         insertedIds,
@@ -195,25 +153,11 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
 
       for (const document of documents.documents) {
         const docWithMetadata = document as T & DocumentWithMetadata;
-        const updatedDocument = {
-          ...docWithMetadata,
-          ...updateData,
-          _updatedAt: generateTimestamp(),
-          _version: (docWithMetadata._version || 1) + 1,
-        } as T & DocumentWithMetadata;
-
-        let documentToStore = updatedDocument;
-        if (this.encryptionManager) {
-          const encryptedData =
-            this.encryptionManager.encryptObject(updatedDocument);
-          documentToStore = {
-            _id: updatedDocument._id,
-            _createdAt: updatedDocument._createdAt,
-            _updatedAt: updatedDocument._updatedAt,
-            _version: updatedDocument._version!,
-            data: encryptedData,
-          } as unknown as T & DocumentWithMetadata;
-        }
+        const updatedDocument = this.processor.updateDocument(
+          docWithMetadata,
+          updateData
+        );
+        const documentToStore = this.encryption.encrypt(updatedDocument);
 
         updatePromises.push(
           this.storage.writeDocument(this.name, documentToStore)
@@ -325,19 +269,12 @@ export class DocumentOperations<T = Document> extends BaseCollection<T> {
 
     const indexName =
       definition.name || Object.keys(definition.fields).join('_');
-    const indexMap = new Map<unknown, string[]>();
 
     const documents = await this.getAllDocuments();
+    this.indexManager.createIndex(documents, definition.fields, indexName);
 
-    for (const document of documents) {
-      const docWithMetadata = document as T & DocumentWithMetadata;
-      const key = this.extractIndexKey(docWithMetadata, definition.fields);
-      if (!indexMap.has(key)) {
-        indexMap.set(key, []);
-      }
-      indexMap.get(key)!.push(docWithMetadata._id);
+    if (this.queryOps && (this.queryOps as any).rebuildIndexResolver) {
+      await (this.queryOps as any).rebuildIndexResolver();
     }
-
-    this.indexes.set(indexName, indexMap);
   }
 }

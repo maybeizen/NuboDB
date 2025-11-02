@@ -2,6 +2,8 @@ import type { Schema, Document, CollectionOptions } from './types';
 import type { FileStorage } from '../storage/FileStorage';
 import { EncryptionManager } from '../encryption/EncryptionManager';
 import { CollectionError } from '../errors/DatabaseError';
+import { IndexManager } from './document';
+import { serialize } from 'bson';
 
 /** Document with system metadata */
 export type DocumentWithMetadata = Document & {
@@ -22,6 +24,7 @@ export abstract class BaseCollection<T = Document> {
   protected indexes: Map<string, Map<any, string[]>> = new Map();
   protected isInitialized: boolean = false;
   protected documentCount: number = 0;
+  protected indexManager: IndexManager<T>;
 
   /** @param name Collection name
    * @param storage Storage engine instance
@@ -46,6 +49,8 @@ export abstract class BaseCollection<T = Document> {
     if (options.encrypt) {
       this.encryptionManager = new EncryptionManager('default-encryption-key');
     }
+
+    this.indexManager = new IndexManager<T>(this.indexes, this.schema);
   }
 
   /** Load documents from storage, build indexes, and populate cache */
@@ -56,7 +61,7 @@ export abstract class BaseCollection<T = Document> {
       const documents = await this.storage.readAllDocuments(this.name);
 
       if (this.options.autoIndex && this.schema) {
-        await this.buildIndexes(documents as T[]);
+        this.indexManager.buildIndexes(documents as T[]);
       }
 
       if (this.options.maxCacheSize && this.options.maxCacheSize > 0) {
@@ -101,50 +106,33 @@ export abstract class BaseCollection<T = Document> {
       }
 
       const decryptedDocuments: T[] = [];
+      decryptedDocuments.length = documents.length;
       const maxCacheSize = this.options.maxCacheSize || 1000;
+      let cacheIndex = 0;
 
-      for (const document of documents) {
+      for (let i = 0; i < documents.length; i++) {
+        const document = documents[i];
+        if (!document) continue;
         let decryptedDocument = document;
         if (this.encryptionManager && document.data) {
           decryptedDocument = this.encryptionManager.decryptObject(
             document.data as string
           );
         }
-        decryptedDocuments.push(decryptedDocument as T);
+        decryptedDocuments[i] = decryptedDocument as T;
 
-        if (this.cache.size < maxCacheSize) {
+        if (cacheIndex < maxCacheSize) {
           this.cache.set(document._id, decryptedDocument as T);
+          cacheIndex++;
         }
       }
 
       this.documentCount = documents.length;
-      return decryptedDocuments;
+      return decryptedDocuments.filter((doc): doc is T => doc !== undefined);
     } catch (error) {
       throw new CollectionError(
         `Failed to get documents: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
-    }
-  }
-
-  /** @param documents Documents to index */
-  protected async buildIndexes(documents: T[]): Promise<void> {
-    if (!this.schema) return;
-
-    for (const [fieldName, fieldDef] of Object.entries(this.schema)) {
-      if (fieldDef.index) {
-        const indexMap = new Map<any, string[]>();
-
-        for (const document of documents) {
-          const docWithMetadata = document as T & DocumentWithMetadata;
-          const value = (document as any)[fieldName];
-          if (!indexMap.has(value)) {
-            indexMap.set(value, []);
-          }
-          indexMap.get(value)!.push(docWithMetadata._id);
-        }
-
-        this.indexes.set(fieldName, indexMap);
-      }
     }
   }
 
@@ -154,32 +142,7 @@ export abstract class BaseCollection<T = Document> {
     document: T & DocumentWithMetadata,
     operation: 'insert' | 'update' | 'delete'
   ): Promise<void> {
-    if (!this.schema) return;
-
-    for (const [fieldName, fieldDef] of Object.entries(this.schema)) {
-      if (fieldDef.index && this.indexes.has(fieldName)) {
-        const index = this.indexes.get(fieldName)!;
-        const value = (document as any)[fieldName];
-
-        if (operation === 'delete') {
-          const documentIds = index.get(value) || [];
-          const updatedIds = documentIds.filter(id => id !== document._id);
-          if (updatedIds.length === 0) {
-            index.delete(value);
-          } else {
-            index.set(value, updatedIds);
-          }
-        } else {
-          if (!index.has(value)) {
-            index.set(value, []);
-          }
-          const documentIds = index.get(value)!;
-          if (!documentIds.includes(document._id)) {
-            documentIds.push(document._id);
-          }
-        }
-      }
-    }
+    this.indexManager.updateIndexes(document, operation);
   }
 
   /** @param document Document to extract key from
@@ -188,14 +151,7 @@ export abstract class BaseCollection<T = Document> {
     document: T & DocumentWithMetadata,
     fields: { [field: string]: 1 | -1 }
   ): unknown | unknown[] {
-    const keys = Object.keys(fields);
-    if (keys.length === 1) {
-      const key = keys[0];
-      if (key) {
-        return (document as Record<string, unknown>)[key];
-      }
-    }
-    return keys.map(key => (document as Record<string, unknown>)[key]);
+    return this.indexManager.extractIndexKey(document, fields);
   }
 
   /** Clear the document cache to free memory */
@@ -213,10 +169,18 @@ export abstract class BaseCollection<T = Document> {
     await this.ensureInitialized();
 
     const documents = await this.getAllDocuments();
-    const totalSize = documents.reduce(
-      (sum, doc) => sum + JSON.stringify(doc).length,
-      0
-    );
+
+    let totalSize = 0;
+    if (documents.length > 0) {
+      const sampleSize = Math.min(100, documents.length);
+      const sample = documents.slice(0, sampleSize);
+      const avgSize =
+        sample.reduce(
+          (sum, doc) => sum + Buffer.from(serialize(doc as Document)).length,
+          0
+        ) / sampleSize;
+      totalSize = Math.round(avgSize * documents.length);
+    }
 
     return {
       totalDocuments: documents.length,

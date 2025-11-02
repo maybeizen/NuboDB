@@ -7,7 +7,8 @@ A modern, fast, and feature-rich NoSQL database for Node.js with TypeScript supp
 - **🔐 Built-in Encryption** - AES-256 encryption for sensitive data
 - **📋 Schema Validation** - Comprehensive validation with custom rules
 - **🔍 Advanced Querying** - MongoDB-like query syntax with QueryBuilder
-- **⚡ High Performance** - Caching, indexing, and newly optimized storage & query engine
+- **⚡ High Performance** - Caching, indexing, and optimized storage & query engine
+- **🚀 Native Go Acceleration** - Core parts written in Go for 2-5x faster speeds
 - **🏗️ Modular Architecture** - Extensible and maintainable codebase
 - **📊 Real-time Statistics** - Monitor database and collection performance
 - **🛡️ Type Safety** - Full TypeScript support with type definitions
@@ -65,6 +66,7 @@ await db.close();
 Check out the comprehensive examples in the `/examples` folder:
 
 ### Core Features
+
 - **[Basic Usage](./examples/basic-usage.js)** - Fundamental operations
 - **[Query Builder](./examples/query-builder.js)** - Advanced querying
 - **[Schema Validation](./examples/schema-validation.js)** - Data validation
@@ -73,6 +75,7 @@ Check out the comprehensive examples in the `/examples` folder:
 - **[Performance](./examples/performance.js)** - Optimization features
 
 ### New Features (v1.3+)
+
 - **[Collection Aliases](./examples/collection-aliases.js)** - Flexible collection naming and shortcuts
 - **[Database Health](./examples/database-health.js)** - Health monitoring and validation
 - **[Query Caching](./examples/query-caching.js)** - Automatic query result caching
@@ -80,6 +83,7 @@ Check out the comprehensive examples in the `/examples` folder:
 - **[Comprehensive Features](./examples/comprehensive-features.js)** - All new features working together
 
 ### Performance & Benchmarks
+
 - **[Performance Benchmark](./examples/performance-benchmark.js)** - Detailed performance testing
 
 Run any example:
@@ -719,18 +723,81 @@ collection.clearCache()                          // Clear cache
 await collection.stats()                         // Collection stats
 ```
 
-## Performance Tips
+## Native Go Bindings
 
-1. **Use Indexes**: Create indexes on frequently queried fields
-2. **Enable Caching**: Keep `cacheDocuments: true` for better read performance
-3. **Leverage Query Caching**: Identical queries are automatically cached for 5 seconds
-4. **Batch Operations**: Use `insertMany()` for bulk inserts
-5. **Limit Results**: Use `limit()` and `skip()` for pagination
-6. **Project Fields**: Use `select()` to return only needed fields
-7. **Use Aliases**: Create short aliases for frequently accessed collections
-8. **Monitor Health**: Use `validate()` to catch performance issues early
-9. **Clear Caches**: Use `clearCaches()` when memory usage is high
-10. **Monitor Stats**: Use `stats()` to monitor performance metrics
+NuboDB includes native Go bindings that provide significant performance improvements for query processing, filtering, sorting, and projection operations.
+
+### Building Native Bindings
+
+```bash
+# Install Go from https://go.dev/dl/
+# Then rebuild the project
+npm run build
+```
+
+The build process will:
+
+1. Compile TypeScript code to `dist/`
+2. Build Go binary (`nubodb-native` or `.exe`) to `dist/`
+3. TypeScript bindings automatically detect and use the binary
+
+### Features
+
+**Parallel Document Filtering:**
+
+- Uses goroutines for concurrent filtering across CPU cores
+- Smart worker pool management (2x CPU cores)
+- Early termination when max results reached
+- Cached regex compilation for pattern matching
+
+**Optimized Index Resolution:**
+
+- Concurrent index lookups
+- Cached sorted entries for range queries
+- Efficient set intersection operations
+- Thread-safe index metadata management
+
+**Native Sorting & Projection:**
+
+- Fast multi-field sorting with proper type handling
+- Efficient field projection (include/exclude)
+- Supports string, number, date, and boolean types
+
+### Performance Benefits
+
+- **2-5x faster** document filtering on large datasets
+- **Parallel processing** across all CPU cores
+- **Reduced memory allocations** with optimized data structures
+- **Faster index resolution** with concurrent lookups
+- **Native sorting** and projection operations
+
+### Automatic Fallback
+
+If the native bindings are not available (Go not installed or binary missing), NuboDB automatically falls back to the optimized TypeScript implementation. No code changes are required - the fallback is transparent.
+
+### Checking Native Bindings Status
+
+The database will log whether native bindings are enabled when opened:
+
+```
+✅ Native Go bindings enabled - using accelerated query processing
+```
+
+or
+
+```
+⚠️  Native Go bindings not available - falling back to TypeScript implementation
+```
+
+### Performance Example
+
+Run the performance example to see native bindings in action:
+
+```bash
+node examples/performance.js
+```
+
+The example will show whether native Go bindings are enabled and demonstrate the performance improvements.
 
 ## Support
 

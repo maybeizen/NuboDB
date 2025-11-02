@@ -1,13 +1,15 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { serialize, deserialize } from 'bson';
 import type { Document, DocumentMetadata } from '../core/types';
 import { StorageError } from '../errors/DatabaseError';
 
-/** Collection-aware file storage engine */
+/** Collection-aware file storage engine using BSON format */
 export class FileStorage {
   private basePath: string;
   private ensuredDirs: Set<string> = new Set();
   private readonly MAX_CONCURRENT_FILES = 100;
+  private readonly FILE_EXTENSION = '.bson';
 
   /** @param basePath Root directory where all collections will be stored */
   constructor(basePath: string) {
@@ -34,12 +36,16 @@ export class FileStorage {
     document: Document
   ): Promise<void> {
     const fullPath = join(this.basePath, collectionPath);
-    const documentPath = join(fullPath, `${document._id}.json`);
+    const documentPath = join(
+      fullPath,
+      `${document._id}${this.FILE_EXTENSION}`
+    );
 
     await this.ensureDirectory(fullPath);
 
     try {
-      await fs.writeFile(documentPath, JSON.stringify(document), 'utf8');
+      const bsonBuffer = Buffer.from(serialize(document));
+      await fs.writeFile(documentPath, bsonBuffer);
     } catch (error) {
       throw new StorageError(
         `Failed to write document: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -55,12 +61,12 @@ export class FileStorage {
     const documentPath = join(
       this.basePath,
       collectionPath,
-      `${documentId}.json`
+      `${documentId}${this.FILE_EXTENSION}`
     );
 
     try {
-      const data = await fs.readFile(documentPath, 'utf8');
-      const document = JSON.parse(data);
+      const bsonBuffer = await fs.readFile(documentPath);
+      const document = deserialize(bsonBuffer) as Document;
 
       document._createdAt = new Date(document._createdAt);
       document._updatedAt = new Date(document._updatedAt);
@@ -83,24 +89,34 @@ export class FileStorage {
     try {
       await this.ensureDirectory(fullPath);
       const files = await fs.readdir(fullPath);
-      const jsonFiles = files.filter(file => file.endsWith('.json'));
+      const bsonFiles = files.filter(file =>
+        file.endsWith(this.FILE_EXTENSION)
+      );
+
+      if (bsonFiles.length === 0) return [];
 
       const documents: Document[] = [];
+      documents.length = bsonFiles.length;
 
-      for (let i = 0; i < jsonFiles.length; i += this.MAX_CONCURRENT_FILES) {
-        const batch = jsonFiles.slice(i, i + this.MAX_CONCURRENT_FILES);
+      for (let i = 0; i < bsonFiles.length; i += this.MAX_CONCURRENT_FILES) {
+        const batch = bsonFiles.slice(i, i + this.MAX_CONCURRENT_FILES);
 
         const batchResults = await Promise.all(
-          batch.map(async file => {
-            const documentId = file.replace('.json', '');
-            return this.readDocument(collectionPath, documentId);
+          batch.map(async (file, batchIndex) => {
+            const documentId = file.replace(this.FILE_EXTENSION, '');
+            const doc = await this.readDocument(collectionPath, documentId);
+            return { index: i + batchIndex, doc };
           })
         );
 
-        documents.push(...(batchResults.filter(Boolean) as Document[]));
+        for (const { index, doc } of batchResults) {
+          if (doc) {
+            documents[index] = doc;
+          }
+        }
       }
 
-      return documents;
+      return documents.filter(Boolean) as Document[];
     } catch (error) {
       throw new StorageError(
         `Failed to read documents: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -116,7 +132,7 @@ export class FileStorage {
     const documentPath = join(
       this.basePath,
       collectionPath,
-      `${documentId}.json`
+      `${documentId}${this.FILE_EXTENSION}`
     );
 
     try {
@@ -140,7 +156,7 @@ export class FileStorage {
     const documentPath = join(
       this.basePath,
       collectionPath,
-      `${documentId}.json`
+      `${documentId}${this.FILE_EXTENSION}`
     );
 
     try {
@@ -159,11 +175,12 @@ export class FileStorage {
     const document = await this.readDocument(collectionPath, documentId);
     if (!document) return null;
 
+    const bsonBuffer = Buffer.from(serialize(document));
     return {
       id: document._id,
       createdAt: document._createdAt,
       updatedAt: document._updatedAt,
-      size: JSON.stringify(document).length,
+      size: bsonBuffer.length,
     };
   }
 }
