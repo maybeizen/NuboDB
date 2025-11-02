@@ -4,7 +4,6 @@ async function encryptionExample() {
   console.log('=== NuboDB Encryption Example ===\n');
 
   try {
-    // Create database with encryption enabled
     const db = await createDatabase({
       path: './examples/encrypted-db',
       debug: true,
@@ -18,7 +17,6 @@ async function encryptionExample() {
 
     const users = db.collection('users');
 
-    // Example 1: Insert sensitive data
     console.log('1. Inserting sensitive data:');
     const sensitiveUser = await users.insert({
       name: 'John Doe',
@@ -38,7 +36,6 @@ async function encryptionExample() {
       sensitiveUser.id
     );
 
-    // Example 2: Insert more sensitive data
     console.log('\n2. Inserting more sensitive data:');
     await users.insertMany([
       {
@@ -69,7 +66,6 @@ async function encryptionExample() {
 
     console.log('   ✅ Multiple sensitive users inserted');
 
-    // Example 3: Query encrypted data
     console.log('\n3. Querying encrypted data:');
     const allUsers = await users.find();
     console.log('   ✅ Found', allUsers.total, 'encrypted users');
@@ -77,7 +73,6 @@ async function encryptionExample() {
     const john = await users.findOne({ name: 'John Doe' });
     console.log('   ✅ Found John:', john?.name, 'with SSN:', john?.ssn);
 
-    // Example 4: Update encrypted data
     console.log('\n4. Updating encrypted data:');
     const updateResult = await users.update(
       { name: 'John Doe' },
@@ -96,7 +91,6 @@ async function encryptionExample() {
       'encrypted documents'
     );
 
-    // Example 5: Find by encrypted fields
     console.log('\n5. Finding by encrypted fields:');
     const usersWithAllergies = await users.find({
       'medicalInfo.allergies': { $exists: true, $ne: [] },
@@ -113,7 +107,6 @@ async function encryptionExample() {
       );
     });
 
-    // Example 6: Complex queries on encrypted data
     console.log('\n6. Complex queries on encrypted data:');
     const usersWithSpecificMedication = await users.find({
       'medicalInfo.medications': { $in: ['insulin'] },
@@ -128,7 +121,6 @@ async function encryptionExample() {
       console.log(`      - ${user.name} (${user.medicalInfo.bloodType})`);
     });
 
-    // Example 7: Database statistics
     console.log('\n7. Database statistics:');
     const stats = await users.stats();
     console.log('   📊 Collection stats:', {
@@ -137,7 +129,6 @@ async function encryptionExample() {
       cacheSize: stats.cacheSize,
     });
 
-    // Example 8: Verify data integrity
     console.log('\n8. Verifying data integrity:');
     const johnUpdated = await users.findOne({ name: 'John Doe' });
     console.log("   ✅ John's updated credit card:", johnUpdated.creditCard);
@@ -146,7 +137,6 @@ async function encryptionExample() {
       johnUpdated.medicalInfo.medications
     );
 
-    // Example 9: Delete encrypted data
     console.log('\n9. Deleting encrypted data:');
     const deleteResult = await users.delete({ name: 'Bob Johnson' });
     console.log(
@@ -155,7 +145,6 @@ async function encryptionExample() {
       'encrypted documents'
     );
 
-    // Example 10: Count remaining documents
     console.log('\n10. Counting remaining documents:');
     const remainingCount = await users.count();
     console.log('   ✅ Remaining encrypted documents:', remainingCount);
@@ -163,7 +152,6 @@ async function encryptionExample() {
     await db.close();
     console.log('\n✅ Encrypted database closed');
 
-    // Example 11: Demonstrate that data is actually encrypted
     console.log('\n11. Data encryption verification:');
     console.log('   🔐 Check the database files in ./examples/encrypted-db/');
     console.log(
@@ -178,5 +166,4 @@ async function encryptionExample() {
   }
 }
 
-// Run the example
 encryptionExample().catch(console.error);

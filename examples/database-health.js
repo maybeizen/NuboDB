@@ -12,7 +12,6 @@ async function databaseHealthExample() {
     await db.open();
     console.log('✅ Database opened\n');
 
-    // Example 1: Basic database validation
     console.log('1. Basic Database Validation:');
     
     const health = await db.validate();
@@ -27,7 +26,6 @@ async function databaseHealthExample() {
     }
     console.log('');
 
-    // Example 2: Database accessibility check
     console.log('2. Database Accessibility Check:');
     
     const isAccessible = await db.isAccessible();
@@ -35,15 +33,12 @@ async function databaseHealthExample() {
     console.log(`   📍 Database path: ${db.getPath()}`);
     console.log('');
 
-    // Example 3: Health monitoring with data
     console.log('3. Health Monitoring with Sample Data:');
     
-    // Create collections with some data
     const users = db.collection('users');
     const products = db.collection('products');
     const orders = db.collection('orders');
     
-    // Insert sample data
     await users.insertMany([
       { name: 'Alice', email: 'alice@example.com', role: 'admin' },
       { name: 'Bob', email: 'bob@example.com', role: 'user' },
@@ -62,12 +57,10 @@ async function databaseHealthExample() {
     
     console.log('   ✅ Sample data inserted');
     
-    // Validate again with data
     const healthWithData = await db.validate();
     console.log('   📊 Health check with data:');
     console.log(`      - Overall health: ${healthWithData.isValid ? '✅ Healthy' : '⚠️ Issues found'}`);
     
-    // Check individual collection health
     for (const [collectionName, stats] of Object.entries(healthWithData.collections)) {
       console.log(`      - ${collectionName}: ${stats.documents} docs, ${stats.issues.length} issues`);
       if (stats.issues.length > 0) {
@@ -76,10 +69,8 @@ async function databaseHealthExample() {
     }
     console.log('');
 
-    // Example 4: Performance health monitoring
     console.log('4. Performance Health Monitoring:');
     
-    // Get database statistics for health assessment
     const dbStats = await db.getStats();
     console.log('   📊 Database performance metrics:');
     console.log(`      - Collections: ${dbStats.collections}`);
@@ -88,7 +79,6 @@ async function databaseHealthExample() {
     console.log(`      - Indexes: ${dbStats.indexes}`);
     console.log(`      - Uptime: ${dbStats.uptime}ms`);
     
-    // Assess performance health
     const avgDocsPerCollection = dbStats.totalDocuments / dbStats.collections;
     const avgSizePerDoc = dbStats.totalSize / dbStats.totalDocuments;
     
@@ -96,7 +86,6 @@ async function databaseHealthExample() {
     console.log(`      - Avg docs per collection: ${avgDocsPerCollection.toFixed(2)}`);
     console.log(`      - Avg size per document: ${avgSizePerDoc.toFixed(2)} bytes`);
     
-    // Health recommendations
     if (avgDocsPerCollection > 100000) {
       console.log('      ⚠️ Consider partitioning large collections');
     } else {
@@ -110,7 +99,6 @@ async function databaseHealthExample() {
     }
     console.log('');
 
-    // Example 5: Collection-specific health checks
     console.log('5. Collection-Specific Health Checks:');
     
     for (const collectionName of ['users', 'products', 'orders']) {
@@ -123,7 +111,6 @@ async function databaseHealthExample() {
       console.log(`      - Cache size: ${stats.cacheSize}`);
       console.log(`      - Indexes: ${stats.indexes}`);
       
-      // Health assessment for each collection
       const isHealthy = stats.totalDocuments > 0 && stats.totalSize > 0;
       console.log(`      - Status: ${isHealthy ? '✅ Healthy' : '⚠️ Check needed'}`);
       
@@ -133,7 +120,6 @@ async function databaseHealthExample() {
     }
     console.log('');
 
-    // Example 6: Automated health monitoring setup
     console.log('6. Automated Health Monitoring Setup:');
     
     let healthCheckCount = 0;
@@ -150,13 +136,8 @@ async function databaseHealthExample() {
         console.log('      🚨 Issues detected in automated check:');
         quickHealth.issues.forEach(issue => console.log(`         - ${issue}`));
         
-        // In a real application, you might:
-        // - Send alerts to monitoring systems
-        // - Log to external services
-        // - Trigger automatic remediation
       }
       
-      // Stop after 3 checks for demo
       if (healthCheckCount >= 3) {
         clearInterval(healthCheckInterval);
         console.log('   ✅ Automated monitoring demo completed');
@@ -164,17 +145,13 @@ async function databaseHealthExample() {
       }
     }, 2000); // Check every 2 seconds
     
-    // Function to finish the example
     async function finishExample() {
       console.log('');
 
-      // Example 7: Health check error scenarios
       console.log('7. Health Check Error Scenarios:');
       
-      // Simulate potential issues by creating imbalanced data
       const testCollection = db.collection('test_collection');
       
-      // This shouldn't cause issues in a well-designed system, but let's monitor
       try {
         await testCollection.insert({ test: 'data' });
         console.log('   ✅ Test data inserted successfully');
@@ -187,7 +164,6 @@ async function databaseHealthExample() {
       
       console.log('');
 
-      // Example 8: Health monitoring best practices
       console.log('8. Health Monitoring Best Practices:');
       console.log('   💡 Best practices for database health monitoring:');
       console.log('      - Run health checks regularly (e.g., every 5 minutes)');
@@ -200,11 +176,9 @@ async function databaseHealthExample() {
       console.log('      - Verify backup and recovery procedures');
       console.log('');
 
-      // Example 9: Integration with monitoring systems
       console.log('9. Integration with Monitoring Systems:');
       console.log('   🔧 Example monitoring integration:');
       
-      // Simulate sending metrics to a monitoring system
       const healthMetrics = {
         timestamp: new Date().toISOString(),
         database: {
@@ -246,5 +220,4 @@ async function databaseHealthExample() {
   }
 }
 
-// Run the example
 databaseHealthExample().catch(console.error);

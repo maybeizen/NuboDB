@@ -13,9 +13,7 @@ async function schemaValidationExample() {
     await db.open();
     console.log('✅ Database opened');
 
-      // Define a comprehensive schema using the new field creators and validators
     const userSchema = {
-      // Using createField helpers for common types
       name: createField.string({
         required: true,
         minLength: 2,
@@ -29,7 +27,6 @@ async function schemaValidationExample() {
         default: 18,
       }),
       
-      // Traditional field definitions with enhanced validators
       isActive: {
         type: 'boolean',
         default: true,
@@ -55,7 +52,6 @@ async function schemaValidationExample() {
         default: 'user',
       },
       
-      // NEW: Additional fields showcasing enhanced validation
       website: createField.url(false, 'https://example.com'), // Optional URL with default
       phone: createField.phone(false), // Optional phone number
       userId: createField.uuid(false), // Optional UUID field
@@ -66,14 +62,12 @@ async function schemaValidationExample() {
       },
     };
 
-    // Create collection with schema
     const users = await db.createCollection('users', userSchema, {
       autoIndex: true,
     });
 
     console.log('✅ Collection created with schema\n');
 
-    // Example 1: Valid document insertion with enhanced fields
     console.log('1. Inserting valid document:');
     try {
       const validUser = await users.insert({
@@ -96,7 +90,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 2: Invalid document (missing required field)
     console.log('\n2. Inserting invalid document (missing required field):');
     try {
       await users.insert({
@@ -107,7 +100,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 3: Invalid email format
     console.log('\n3. Inserting invalid document (bad email format):');
     try {
       await users.insert({
@@ -119,7 +111,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 4: Age out of range
     console.log('\n4. Inserting invalid document (age out of range):');
     try {
       await users.insert({
@@ -131,7 +122,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 5: Invalid enum value
     console.log('\n5. Inserting invalid document (invalid enum):');
     try {
       await users.insert({
@@ -144,18 +134,11 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 6: Using defaults
     console.log('\n6. Inserting document with defaults:');
     try {
       const defaultUser = await users.insert({
         name: 'Default User',
         email: 'default@example.com',
-        // age will default to 18
-        // isActive will default to true
-        // tags will default to []
-        // profile will default to {}
-        // score will default to 0
-        // category will default to 'user'
       });
       console.log(
         '   ✅ User with defaults inserted with ID:',
@@ -165,7 +148,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 7: Duplicate email (unique constraint)
     console.log('\n7. Inserting duplicate email:');
     try {
       await users.insert({
@@ -177,7 +159,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 8: Valid update
     console.log('\n8. Updating with valid data:');
     try {
       const updateResult = await users.update(
@@ -193,7 +174,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 9: Invalid update
     console.log('\n9. Updating with invalid data:');
     try {
       await users.update(
@@ -204,10 +184,8 @@ async function schemaValidationExample() {
       console.log('   ❌ Validation error:', error.message);
     }
 
-    // Example 10: Schema validation modes
     console.log('\n10. Testing different validation modes:');
 
-    // Create collection with warn mode
     const warnUsers = await db.createCollection('warn-users', userSchema, {
       schemaValidation: 'warn',
     });
@@ -223,7 +201,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Error:', error.message);
     }
 
-    // Example 11: Testing enhanced field validators
     console.log('\n11. Testing enhanced field validators:');
     
     try {
@@ -259,7 +236,6 @@ async function schemaValidationExample() {
       console.log('   ❌ Password validation error:', error.message);
     }
     
-    // Example 12: Successfully using enhanced validators
     console.log('\n12. Valid enhanced field data:');
     try {
       const enhancedUser = await users.insert({
@@ -284,5 +260,4 @@ async function schemaValidationExample() {
   }
 }
 
-// Run the example
 schemaValidationExample().catch(console.error);

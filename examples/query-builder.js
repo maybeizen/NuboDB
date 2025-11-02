@@ -14,7 +14,6 @@ async function queryBuilderExample() {
 
     const users = db.collection('users');
 
-    // Insert sample data
     await users.insertMany([
       { name: 'Alice', age: 25, city: 'New York', active: true, salary: 75000 },
       {
@@ -45,7 +44,6 @@ async function queryBuilderExample() {
 
     console.log('✅ Sample data inserted\n');
 
-    // Example 1: Basic where clause
     console.log('1. Basic where clause:');
     const youngUsers = await users.query().where('age', '$lt', 30).execute();
     console.log(
@@ -53,7 +51,6 @@ async function queryBuilderExample() {
       youngUsers.documents.map(u => u.name)
     );
 
-    // Example 2: Multiple conditions with AND
     console.log('\n2. Multiple AND conditions:');
     const activeHighEarners = await users
       .query()
@@ -65,7 +62,6 @@ async function queryBuilderExample() {
       activeHighEarners.documents.map(u => u.name)
     );
 
-    // Example 3: OR conditions
     console.log('\n3. OR conditions:');
     const nyOrLaUsers = await users
       .query()
@@ -77,7 +73,6 @@ async function queryBuilderExample() {
       nyOrLaUsers.documents.map(u => `${u.name} (${u.city})`)
     );
 
-    // Example 4: Sorting
     console.log('\n4. Sorting by age (descending):');
     const sortedByAge = await users.query().sort('age', -1).limit(3).execute();
     console.log(
@@ -85,12 +80,10 @@ async function queryBuilderExample() {
       sortedByAge.documents.map(u => `${u.name} (${u.age})`)
     );
 
-    // Example 5: Field projection
     console.log('\n5. Field projection (only name and salary):');
     const projected = await users.query().select(['name', 'salary']).execute();
     console.log('   Users with projected fields:', projected.documents);
 
-    // Example 6: Complex query with pagination
     console.log('\n6. Complex query with pagination:');
     const complexQuery = await users
       .query()
@@ -107,12 +100,10 @@ async function queryBuilderExample() {
       complexQuery.documents
     );
 
-    // Example 7: Find one document
     console.log('\n7. Find one document:');
     const alice = await users.query().where('name', '$eq', 'Alice').findOne();
     console.log('   Found Alice:', alice);
 
-    // Example 8: Count documents
     console.log('\n8. Count documents:');
     const activeCount = await users
       .query()
@@ -120,12 +111,10 @@ async function queryBuilderExample() {
       .count();
     console.log(`   Active users count: ${activeCount}`);
 
-    // Example 9: Check existence
     console.log('\n9. Check if document exists:');
     const exists = await users.query().where('name', '$eq', 'Alice').exists();
     console.log(`   Alice exists: ${exists}`);
 
-    // Example 10: Chained operations
     console.log('\n10. Chained operations:');
     const result = await users
       .query()
@@ -148,5 +137,4 @@ async function queryBuilderExample() {
   }
 }
 
-// Run the example
 queryBuilderExample().catch(console.error);

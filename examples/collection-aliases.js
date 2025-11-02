@@ -12,10 +12,8 @@ async function collectionAliasesExample() {
     await db.open();
     console.log('✅ Database opened\n');
 
-    // Example 1: Creating and using basic aliases
     console.log('1. Creating Basic Aliases:');
     
-    // Create full collection first
     const userAccounts = db.collection('user_accounts');
     await userAccounts.insert({
       name: 'John Doe',
@@ -23,13 +21,11 @@ async function collectionAliasesExample() {
       role: 'admin'
     });
     
-    // Create aliases for shorter names
     db.createAlias('users', 'user_accounts');
     db.createAlias('u', 'user_accounts');
     
     console.log('   ✅ Created aliases: "users" and "u" for "user_accounts"');
     
-    // Use aliases to access the same collection
     const usersViaAlias = db.collection('users');
     const usersViaShortAlias = db.collection('u');
     
@@ -40,10 +36,8 @@ async function collectionAliasesExample() {
     console.log(`   📊 Count via "u" alias: ${count2}`);
     console.log(`   📊 All aliases point to same data: ${count1 === count2 ? '✅' : '❌'}\n`);
 
-    // Example 2: Environment-specific aliases
     console.log('2. Environment-Specific Aliases:');
     
-    // Simulate different environments
     const env = process.env.NODE_ENV || 'development';
     
     if (env === 'test') {
@@ -60,7 +54,6 @@ async function collectionAliasesExample() {
       console.log('   🚀 Production environment aliases created');
     }
     
-    // Use environment-agnostic code
     const products = db.collection('products');
     await products.insert({
       name: 'Example Product',
@@ -70,10 +63,8 @@ async function collectionAliasesExample() {
     
     console.log('   ✅ Environment-agnostic code works across all environments\n');
 
-    // Example 3: Backward compatibility aliases
     console.log('3. Backward Compatibility Aliases:');
     
-    // Old collection name was 'userProfiles', new name is 'user_profiles'
     db.createAlias('userProfiles', 'user_profiles'); // Old camelCase
     db.createAlias('user-profiles', 'user_profiles'); // Kebab case variation
     
@@ -96,10 +87,8 @@ async function collectionAliasesExample() {
     console.log(`   📊 Count via kebab-case name: ${kebabCount}`);
     console.log('   ✅ Backward compatibility maintained\n');
 
-    // Example 4: Team-specific aliases
     console.log('4. Team-Specific Aliases:');
     
-    // Different teams prefer different naming conventions
     db.createAlias('customers', 'customer_data');      // Sales team
     db.createAlias('clients', 'customer_data');        // Account management
     db.createAlias('end_users', 'customer_data');      // Support team
@@ -108,7 +97,6 @@ async function collectionAliasesExample() {
     const accountView = db.collection('clients');
     const supportView = db.collection('end_users');
     
-    // Each team can use their preferred terminology
     await salesView.insert({
       companyName: 'Acme Corp',
       revenue: 50000,
@@ -123,29 +111,23 @@ async function collectionAliasesExample() {
     const supportTickets = await supportView.find({ revenue: { $gte: 10000 } });
     console.log(`   ✅ Support team found ${supportTickets.total} high-value end users\n`);
 
-    // Example 5: Alias management operations
     console.log('5. Alias Management:');
     
-    // Check if names are aliases
     console.log(`   🔍 'users' is alias: ${db.isAlias('users')}`);
     console.log(`   🔍 'user_accounts' is alias: ${db.isAlias('user_accounts')}`);
     
-    // Get all aliases
     const allAliases = db.getAliases();
     console.log('   📋 All current aliases:');
     for (const [alias, target] of Object.entries(allAliases)) {
       console.log(`      - "${alias}" → "${target}"`);
     }
     
-    // Remove an alias
     const removed = db.removeAlias('u');
     console.log(`   🗑️ Removed "u" alias: ${removed ? 'success' : 'failed'}`);
     
-    // Verify removal
     const aliasesAfterRemoval = db.getAliases();
     console.log(`   📊 Aliases after removal: ${Object.keys(aliasesAfterRemoval).length}`);
     
-    // Try to use removed alias (should still work if collection exists)
     try {
       const directCollection = db.collection('u');
       await directCollection.count(); // This creates a new collection named 'u'
@@ -156,20 +138,16 @@ async function collectionAliasesExample() {
     
     console.log('\n');
 
-    // Example 6: Alias naming best practices
     console.log('6. Alias Naming Best Practices:');
     
     try {
-      // Good: Short, memorable aliases
       db.createAlias('invoices', 'billing_invoices');
       db.createAlias('inv', 'billing_invoices');
       console.log('   ✅ Good: Short aliases created');
       
-      // Good: Descriptive aliases for clarity
       db.createAlias('active_users', 'user_accounts');
       console.log('   ✅ Good: Descriptive alias created');
       
-      // Try to create duplicate alias (should fail)
       db.createAlias('users', 'some_other_collection');
     } catch (error) {
       console.log('   ✅ Good: Duplicate alias creation prevented');
@@ -178,19 +156,16 @@ async function collectionAliasesExample() {
     
     console.log('\n');
 
-    // Example 7: Performance impact of aliases
     console.log('7. Alias Performance Impact:');
     
     const iterations = 1000;
     
-    // Benchmark direct collection access
     const directStart = Date.now();
     for (let i = 0; i < iterations; i++) {
       await db.collection('user_accounts').count();
     }
     const directTime = Date.now() - directStart;
     
-    // Benchmark alias collection access
     const aliasStart = Date.now();
     for (let i = 0; i < iterations; i++) {
       await db.collection('users').count();
@@ -202,23 +177,19 @@ async function collectionAliasesExample() {
     console.log(`   📊 Performance difference: ${Math.abs(directTime - aliasTime)}ms (negligible)`);
     console.log('   ✅ Aliases have virtually no performance impact\n');
 
-    // Example 8: Complex alias scenarios
     console.log('8. Complex Alias Scenarios:');
     
-    // Multi-tenant application aliases
     const tenantId = 'tenant_123';
     db.createAlias(`${tenantId}_users`, 'user_accounts');
     db.createAlias(`${tenantId}_data`, 'application_data');
     
     console.log(`   ✅ Tenant-specific aliases created for ${tenantId}`);
     
-    // API version aliases
     db.createAlias('v1_users', 'user_accounts');
     db.createAlias('v2_users', 'user_accounts_v2');
     
     console.log('   ✅ API version aliases created');
     
-    // Module-specific aliases
     db.createAlias('auth_users', 'user_accounts');
     db.createAlias('profile_users', 'user_accounts');
     db.createAlias('billing_customers', 'user_accounts');
@@ -244,5 +215,4 @@ async function collectionAliasesExample() {
   }
 }
 
-// Run the example
 collectionAliasesExample().catch(console.error);

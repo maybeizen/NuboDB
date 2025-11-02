@@ -13,23 +13,17 @@ async function fieldValidationExample() {
     await db.open();
     console.log('✅ Database opened with strict validation\n');
 
-    // Example 1: Using createField helpers
     console.log('1. Using createField Helpers:');
     
     const userSchema = {
-      // Email field with built-in validation
       email: createField.email(true), // Required email
       
-      // URL field with optional default
       website: createField.url(false, 'https://example.com'),
       
-      // Phone field
       phone: createField.phone(true), // Required phone number
       
-      // UUID field
       userId: createField.uuid(false), // Optional UUID
       
-      // String field with constraints
       username: createField.string({
         required: true,
         minLength: 3,
@@ -37,7 +31,6 @@ async function fieldValidationExample() {
         pattern: /^[a-zA-Z0-9_]+$/,
       }),
       
-      // Number field with constraints
       age: createField.number({
         required: true,
         min: 13,
@@ -45,7 +38,6 @@ async function fieldValidationExample() {
         positive: true,
       }),
       
-      // Traditional fields mixed in
       name: {
         type: 'string',
         required: true,
@@ -62,7 +54,6 @@ async function fieldValidationExample() {
     const users = await db.createCollection('users', userSchema);
     console.log('   ✅ Collection created with enhanced field validation\n');
 
-    // Example 2: Valid data insertion
     console.log('2. Valid Data Insertion:');
     
     try {
@@ -83,7 +74,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 3: Email validation testing
     console.log('3. Email Validation Testing:');
     
     const emailTests = [
@@ -120,7 +110,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 4: URL validation testing
     console.log('4. URL Validation Testing:');
     
     const urlTests = [
@@ -158,7 +147,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 5: Phone number validation testing
     console.log('5. Phone Number Validation Testing:');
     
     const phoneTests = [
@@ -197,7 +185,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 6: UUID validation testing
     console.log('6. UUID Validation Testing:');
     
     const uuidTests = [
@@ -234,7 +221,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 7: String constraint validation
     console.log('7. String Constraint Validation:');
     
     const stringTests = [
@@ -271,7 +257,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 8: Number constraint validation
     console.log('8. Number Constraint Validation:');
     
     const numberTests = [
@@ -309,7 +294,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 9: Using individual validators
     console.log('9. Individual Validator Usage:');
     
     const productSchema = {
@@ -343,7 +327,6 @@ async function fieldValidationExample() {
     const products = await db.createCollection('products', productSchema);
     console.log('   ✅ Products collection created with individual validators');
     
-    // Test individual validators
     try {
       await products.insert({
         name: 'Smartphone',
@@ -357,7 +340,6 @@ async function fieldValidationExample() {
       console.log('   ❌ Product validation error:', error.message);
     }
     
-    // Test validation failures
     try {
       await products.insert({
         name: 'TV', // Valid
@@ -371,7 +353,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 10: Custom validation combinations
     console.log('10. Custom Validation Combinations:');
     
     const accountSchema = {
@@ -413,7 +394,6 @@ async function fieldValidationExample() {
     }
     console.log('');
 
-    // Example 11: Validation performance impact
     console.log('11. Validation Performance Impact:');
     
     const testData = Array.from({ length: 100 }, (_, i) => ({
@@ -452,5 +432,4 @@ async function fieldValidationExample() {
   }
 }
 
-// Run the example
 fieldValidationExample().catch(console.error);

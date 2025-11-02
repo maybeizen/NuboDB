@@ -4,7 +4,6 @@ async function basicUsage() {
   console.log('=== NuboDB Basic Usage Example ===\n');
 
   try {
-    // Create and open database
     const db = await createDatabase({
       path: './examples/basic-db',
       debug: true,
@@ -14,10 +13,7 @@ async function basicUsage() {
     await db.open();
     console.log('✅ Database opened successfully');
 
-    // Get a collection
     const users = db.collection('users');
-
-    // Insert a single document
     const insertResult = await users.insert({
       name: 'John Doe',
       email: 'john@example.com',
@@ -31,8 +27,6 @@ async function basicUsage() {
     });
 
     console.log('✅ Inserted user with ID:', insertResult.id);
-
-    // Insert multiple documents
     const batchResult = await users.insertMany([
       {
         name: 'Jane Smith',
@@ -55,64 +49,41 @@ async function basicUsage() {
     ]);
 
     console.log('✅ Batch inserted:', batchResult.insertedCount, 'users');
-
-    // Find documents
     const allUsers = await users.find();
     console.log('✅ Found', allUsers.total, 'users');
-
-    // Find with filter
     const activeUsers = await users.find({ isActive: true });
     console.log('✅ Found', activeUsers.total, 'active users');
-
-    // Find one document
     const john = await users.findOne({ name: 'John Doe' });
     console.log('✅ Found John:', john?.name);
-
-    // Find by ID
     const userById = await users.findById(insertResult.id);
     console.log('✅ Found user by ID:', userById?.name);
-
-    // Update document
     const updateResult = await users.update(
       { name: 'John Doe' },
       { age: 31, lastUpdated: new Date() }
     );
     console.log('✅ Updated', updateResult.modifiedCount, 'documents');
-
-    // Upsert (update or insert)
     const upsertResult = await users.upsert(
       { email: 'newuser@example.com' },
       { name: 'New User', age: 22, isActive: true }
     );
     console.log('✅ Upsert result:', upsertResult);
-
-    // Delete document
     const deleteResult = await users.delete({ name: 'Bob Johnson' });
     console.log('✅ Deleted', deleteResult.deletedCount, 'documents');
-
-    // Count documents
     const count = await users.count();
     console.log('✅ Total users:', count);
-
-    // Check if collection is empty
     const isEmpty = await users.isEmpty();
     console.log('✅ Collection is empty:', isEmpty);
-
-    // Get collection statistics
     const stats = await users.stats();
     console.log('✅ Collection stats:', stats);
 
-    // Collection aliases (NEW!)
     db.createAlias('u', 'users');
     const usersViaAlias = db.collection('u');
     const aliasCount = await usersViaAlias.count();
     console.log('✅ Count via alias:', aliasCount);
 
-    // Database health check (NEW!)
     const health = await db.validate();
     console.log('✅ Database health:', health.isValid ? 'Healthy' : 'Issues found');
 
-    // Clear cache
     users.clearCache();
     console.log('✅ Cache cleared');
 
@@ -124,5 +95,4 @@ async function basicUsage() {
   }
 }
 
-// Run the example
 basicUsage().catch(console.error);

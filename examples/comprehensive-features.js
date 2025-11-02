@@ -15,18 +15,14 @@ async function comprehensiveFeaturesExample() {
     await db.open();
     console.log('✅ Database opened with comprehensive configuration\n');
 
-    // Example 1: Complete user management system
     console.log('1. Complete User Management System:');
     
-    // Create comprehensive user schema using all new features
     const userSchema = {
-      // Enhanced field validation
       email: createField.email(true),
       website: createField.url(false, 'https://example.com'),
       phone: createField.phone(true),
       userId: createField.uuid(true),
       
-      // String fields with validation
       username: createField.string({
         required: true,
         minLength: 3,
@@ -46,7 +42,6 @@ async function comprehensiveFeaturesExample() {
         validate: validators.minLength(2),
       },
       
-      // Number fields with validation
       age: createField.number({
         required: true,
         min: 13,
@@ -60,7 +55,6 @@ async function comprehensiveFeaturesExample() {
         validate: validators.range(20000, 500000),
       },
       
-      // Complex fields
       preferences: {
         type: 'object',
         default: {},
@@ -86,14 +80,12 @@ async function comprehensiveFeaturesExample() {
     const users = await db.createCollection('users', userSchema);
     console.log('   ✅ Users collection created with comprehensive schema');
     
-    // Create collection aliases for different team perspectives
     db.createAlias('employees', 'users');
     db.createAlias('staff', 'users');
     db.createAlias('team_members', 'users');
     
     console.log('   ✅ Collection aliases created for different team perspectives\n');
 
-    // Example 2: Data insertion with validation
     console.log('2. Data Insertion with Validation:');
     
     const sampleUsers = [
@@ -150,10 +142,8 @@ async function comprehensiveFeaturesExample() {
     console.log(`   ✅ Inserted ${insertResults.insertedCount} users with full validation`);
     console.log('');
 
-    // Example 3: Query caching performance
     console.log('3. Query Caching Performance:');
     
-    // Test query caching with different alias access
     const cacheTestQueries = [
       { name: 'Direct collection', collection: users, query: { department: 'Engineering' } },
       { name: 'Via employees alias', collection: db.collection('employees'), query: { department: 'Engineering' } },
@@ -161,12 +151,10 @@ async function comprehensiveFeaturesExample() {
     ];
     
     for (const { name, collection, query } of cacheTestQueries) {
-      // First query (cache miss)
       const start1 = process.hrtime.bigint();
       const result1 = await collection.find(query);
       const time1 = Number(process.hrtime.bigint() - start1) / 1000000;
       
-      // Second query (cache hit)
       const start2 = process.hrtime.bigint();
       const result2 = await collection.find(query);
       const time2 = Number(process.hrtime.bigint() - start2) / 1000000;
@@ -178,7 +166,6 @@ async function comprehensiveFeaturesExample() {
     }
     console.log('');
 
-    // Example 4: Advanced queries with caching
     console.log('4. Advanced Queries with Caching:');
     
     const advancedQueries = [
@@ -202,7 +189,6 @@ async function comprehensiveFeaturesExample() {
     for (const { name, query, options } of advancedQueries) {
       console.log(`   🔍 Testing: ${name}`);
       
-      // Using different collection access methods
       const directResult = await users.find(query, options);
       const aliasResult = await db.collection('employees').find(query, options);
       
@@ -212,21 +198,17 @@ async function comprehensiveFeaturesExample() {
     }
     console.log('');
 
-    // Example 5: Database health monitoring integration
     console.log('5. Database Health Monitoring:');
     
-    // Perform comprehensive health check
     const health = await db.validate();
     console.log('   📊 Database health status:');
     console.log(`      - Overall health: ${health.isValid ? '✅ Healthy' : '⚠️ Issues found'}`);
     console.log(`      - Collections: ${Object.keys(health.collections).length}`);
     console.log(`      - Total issues: ${health.issues.length}`);
     
-    // Check accessibility
     const isAccessible = await db.isAccessible();
     console.log(`      - Database accessible: ${isAccessible ? '✅' : '❌'}`);
     
-    // Get detailed statistics
     const dbStats = await db.getStats();
     console.log('   📈 Performance metrics:');
     console.log(`      - Total documents: ${dbStats.totalDocuments}`);
@@ -234,7 +216,6 @@ async function comprehensiveFeaturesExample() {
     console.log(`      - Indexes: ${dbStats.indexes}`);
     console.log(`      - Uptime: ${dbStats.uptime}ms`);
     
-    // Collection-specific health
     for (const [collectionName, collectionHealth] of Object.entries(health.collections)) {
       console.log(`   📋 ${collectionName}:`);
       console.log(`      - Documents: ${collectionHealth.documents}`);
@@ -247,7 +228,6 @@ async function comprehensiveFeaturesExample() {
     }
     console.log('');
 
-    // Example 6: Comprehensive validation testing
     console.log('6. Comprehensive Validation Testing:');
     
     const validationTests = [
@@ -339,14 +319,11 @@ async function comprehensiveFeaturesExample() {
     }
     console.log('');
 
-    // Example 7: Performance optimization demonstration
     console.log('7. Performance Optimization Features:');
     
-    // Clear caches to test performance
     users.clearCache();
     console.log('   🧹 Caches cleared for performance testing');
     
-    // Test batch operations
     const batchData = Array.from({ length: 50 }, (_, i) => ({
       email: `batch${i}@company.com`,
       phone: `+1-555-${String(i).padStart(3, '0')}-0000`,
@@ -367,7 +344,6 @@ async function comprehensiveFeaturesExample() {
     console.log(`      - Time: ${batchTime.toFixed(3)}ms`);
     console.log(`      - Rate: ${(batchResult.insertedCount / batchTime * 1000).toFixed(2)} docs/sec`);
     
-    // Test query performance with caching
     const queryStart = process.hrtime.bigint();
     const queryResult = await users.find({ department: 'Engineering' });
     const queryTime = Number(process.hrtime.bigint() - queryStart) / 1000000;
@@ -382,22 +358,17 @@ async function comprehensiveFeaturesExample() {
     console.log(`      - Cache speedup: ${queryTime > 0 ? (queryTime / Math.max(cachedQueryTime, 0.001)).toFixed(2) : 'N/A'}x`);
     console.log('');
 
-    // Example 8: Alias management and organization
     console.log('8. Comprehensive Alias Management:');
     
-    // Create environment and team-specific aliases
     const environment = process.env.NODE_ENV || 'development';
     
-    // Environment aliases
     db.createAlias(`${environment}_users`, 'users');
     db.createAlias(`${environment}_employees`, 'users');
     
-    // Department aliases
     db.createAlias('engineering_team', 'users');
     db.createAlias('marketing_team', 'users');
     db.createAlias('sales_team', 'users');
     
-    // Functional aliases
     db.createAlias('active_users', 'users');
     db.createAlias('all_staff', 'users');
     
@@ -407,7 +378,6 @@ async function comprehensiveFeaturesExample() {
       console.log(`      - "${alias}" → "${target}"`);
     }
     
-    // Test department-specific queries using aliases
     const engineeringViaAlias = await db.collection('engineering_team').find({ department: 'Engineering' });
     const marketingViaAlias = await db.collection('marketing_team').find({ department: 'Marketing' });
     
@@ -416,18 +386,14 @@ async function comprehensiveFeaturesExample() {
     console.log(`      - Marketing team: ${marketingViaAlias.total} members`);
     console.log('');
 
-    // Example 9: Real-world scenario simulation
     console.log('9. Real-World Scenario Simulation:');
     
-    // Simulate a user update workflow
     console.log('   👤 User profile update workflow:');
     
-    // Find user by email (cached query)
     const userToUpdate = await users.findOne({ email: 'alice@company.com' });
     if (userToUpdate) {
       console.log(`   📝 Found user: ${userToUpdate.firstName} ${userToUpdate.lastName}`);
       
-      // Update user with validation
       try {
         const updateResult = await users.update(
           { email: 'alice@company.com' },
@@ -446,7 +412,6 @@ async function comprehensiveFeaturesExample() {
       }
     }
     
-    // Simulate department transfer
     console.log('   🔄 Department transfer simulation:');
     const transferResult = await users.update(
       { email: 'bob@company.com' },
@@ -454,12 +419,10 @@ async function comprehensiveFeaturesExample() {
     );
     console.log(`   ✅ Transferred ${transferResult.modifiedCount} employee`);
     
-    // Health check after operations
     const postOpHealth = await db.validate();
     console.log(`   🏥 Post-operation health: ${postOpHealth.isValid ? '✅ Healthy' : '⚠️ Issues'}`);
     console.log('');
 
-    // Example 10: Feature integration summary
     console.log('10. Feature Integration Summary:');
     
     const finalStats = await db.getStats();
@@ -496,5 +459,4 @@ async function comprehensiveFeaturesExample() {
   }
 }
 
-// Run the example
 comprehensiveFeaturesExample().catch(console.error);
